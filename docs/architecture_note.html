@@ -1,0 +1,77 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Architecture note</title>
+<style>
+@page{size:A4;margin:13mm 14mm}
+body{font:10.2px/1.4 system-ui,Segoe UI,Roboto,sans-serif;color:#1c2430;margin:0}
+h1{font-size:19px;margin:0 0 2px}h2{font-size:12.5px;margin:11px 0 3px;border-bottom:1.5px solid #1f5fbf;padding-bottom:1px}
+p{margin:3px 0}ul{margin:3px 0;padding-left:16px}li{margin:1.5px 0}
+.sub{color:#5d6877;margin:0 0 6px}
+table{border-collapse:collapse;width:100%;font-size:9.4px;margin:4px 0}th,td{border:1px solid #d9dee5;padding:3px 5px;vertical-align:top;text-align:left}th{background:#f1f4f8}
+svg text{font:9.5px system-ui,sans-serif;fill:#1c2430}.t{font-weight:600}.m{fill:#5d6877;font-size:8.5px}
+.pb{break-before:page}
+</style></head><body>
+<h1>Architecture note</h1>
+<p class="sub">AI-augmented ML analytics platform: what is built, and how it grows into production with Kafka, Elasticsearch, Grafana and scheduled pipelines.</p>
+
+<h2>1. What is built (the prototype)</h2>
+<svg viewBox="0 0 760 150" width="100%" role="img" aria-label="Prototype architecture">
+<defs><marker id="a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7z" fill="#5d6877"/></marker></defs>
+<g fill="#fff" stroke="#1f5fbf" stroke-width="1.2">
+<rect x="4" y="52" width="80" height="44" rx="6"/><rect x="112" y="52" width="100" height="44" rx="6"/><rect x="240" y="8" width="150" height="134" rx="6" fill="#f6f9ff"/>
+<rect x="420" y="20" width="120" height="40" rx="6"/><rect x="420" y="88" width="120" height="40" rx="6"/><rect x="580" y="20" width="170" height="40" rx="6"/><rect x="580" y="88" width="170" height="40" rx="6"/></g>
+<g stroke="#5d6877" stroke-width="1.2" fill="none" marker-end="url(#a)"><path d="M84,74 H110"/><path d="M212,74 H238"/><path d="M390,40 H418"/><path d="M390,108 H418"/><path d="M540,40 H578"/><path d="M540,108 H578"/></g>
+<text class="t" x="44" y="72" text-anchor="middle">Browser</text><text class="m" x="44" y="85" text-anchor="middle">web page</text>
+<text class="t" x="162" y="72" text-anchor="middle">FastAPI</text><text class="m" x="162" y="85" text-anchor="middle">login, routes</text>
+<text class="t" x="250" y="26">Pipeline (one function)</text>
+<text x="250" y="44">1 clean views (SQL)</text><text x="250" y="58">2 data-quality checks</text><text x="250" y="72">3 training table</text><text x="250" y="86">4 business questions, KPIs</text><text x="250" y="100">5 ML + drift (PSI)</text><text x="250" y="114">6 AI insights + guardrails</text><text class="m" x="250" y="132">use case = YAML + SQL files</text>
+<text class="t" x="480" y="38" text-anchor="middle">PostgreSQL</text><text class="m" x="480" y="51" text-anchor="middle">platform + ws_&lt;id&gt; schemas</text>
+<text class="t" x="480" y="106" text-anchor="middle">results.json</text><text class="m" x="480" y="119" text-anchor="middle">+ insights.json</text>
+<text class="t" x="665" y="38" text-anchor="middle">Snwolley adapter</text><text class="m" x="665" y="51" text-anchor="middle">placeholder, key from env</text>
+<text class="t" x="665" y="106" text-anchor="middle">Page + business report</text><text class="m" x="665" y="119" text-anchor="middle">read only the JSON files</text>
+</svg>
+<ul>
+<li><b>Multi-tenancy:</b> one Postgres schema per workspace (name chosen by the server, never the client); platform tables (users, workspaces, runs) in their own schema. A partial unique index allows only one running analysis per workspace.</li>
+<li><b>Generic by configuration:</b> the platform code never mentions churn or revenue. A use case is a YAML file and SQL files; two ship (classification and regression).</li>
+<li><b>Traceability:</b> <code>results.json</code> is the single record of a run. The AI summary and the report read only that record, so every number can be traced to SQL or the ML step.</li>
+<li><b>AI behind an adapter:</b> the Snwolley call lives in one file. The AI only sees a numbered facts sheet; its output is checked (citations, numbers, causal wording, allowed recommendation types) and falls back to a labelled template.</li>
+</ul>
+
+<h2>2. Production architecture</h2>
+<svg viewBox="0 0 760 175" width="100%" role="img" aria-label="Production architecture">
+<defs><marker id="b" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7z" fill="#5d6877"/></marker></defs>
+<g fill="#fff" stroke="#1f5fbf" stroke-width="1.2">
+<rect x="4" y="10" width="110" height="46" rx="6"/><rect x="4" y="110" width="110" height="46" rx="6"/>
+<rect x="150" y="55" width="100" height="46" rx="6" fill="#eaf2ff"/>
+<rect x="290" y="10" width="110" height="46" rx="6"/><rect x="290" y="110" width="110" height="46" rx="6" fill="#f6f9ff"/>
+<rect x="440" y="10" width="140" height="46" rx="6"/><rect x="440" y="110" width="140" height="46" rx="6"/>
+<rect x="620" y="10" width="130" height="46" rx="6"/><rect x="620" y="110" width="130" height="46" rx="6"/></g>
+<g stroke="#5d6877" stroke-width="1.2" fill="none" marker-end="url(#b)"><path d="M114,33 L148,68"/><path d="M114,133 L148,90"/><path d="M250,70 L288,40"/><path d="M250,86 L288,130"/><path d="M400,33 H438"/><path d="M400,133 H438"/><path d="M345,110 V58"/><path d="M580,33 H618"/><path d="M580,133 H618"/></g>
+<text class="t" x="59" y="30" text-anchor="middle">Source systems</text><text class="m" x="59" y="43" text-anchor="middle">billing, network, CRM</text>
+<text class="t" x="59" y="130" text-anchor="middle">Support tickets</text><text class="m" x="59" y="143" text-anchor="middle">free text, app logs</text>
+<text class="t" x="200" y="75" text-anchor="middle">Kafka</text><text class="m" x="200" y="88" text-anchor="middle">events per tenant</text>
+<text class="t" x="345" y="30" text-anchor="middle">Raw loader</text><text class="m" x="345" y="43" text-anchor="middle">idempotent upserts</text>
+<text class="t" x="345" y="130" text-anchor="middle">Scheduler</text><text class="m" x="345" y="143" text-anchor="middle">runs the pipeline</text>
+<text class="t" x="510" y="30" text-anchor="middle">PostgreSQL</text><text class="m" x="510" y="43" text-anchor="middle">raw, clean views, features, scores</text>
+<text class="t" x="510" y="130" text-anchor="middle">Workers + model registry</text><text class="m" x="510" y="143" text-anchor="middle">train, score, drift, AI step</text>
+<text class="t" x="685" y="30" text-anchor="middle">Elasticsearch</text><text class="m" x="685" y="43" text-anchor="middle">tickets text, logs, AI audit</text>
+<text class="t" x="685" y="130" text-anchor="middle">Grafana</text><text class="m" x="685" y="143" text-anchor="middle">ops + model monitoring, alerts</text>
+</svg>
+<table>
+<tr><th style="width:15%">Component</th><th style="width:43%">Role</th><th>Why, and what it is not for</th></tr>
+<tr><td><b>Kafka</b></td><td>Source systems publish events (payment, usage, ticket, plan change), keyed by workspace and customer. A consumer upserts into the raw tables using the event id.</td><td>Decouples sources from the platform, buffers bursts, lets us replay history after a bug fix. Event ids make duplicates harmless, which is exactly the duplicate-row problem the clean views handle today. Not used for analytics queries.</td></tr>
+<tr><td><b>Scheduled pipelines</b></td><td>Nightly: load, clean views, <b>data-quality gate</b>, features at today's date, score with the registered model, drift check, AI insights, report. Weekly or monthly: retrain as champion vs challenger. Each run is idempotent and recorded in <code>platform.runs</code>.</td><td>Orchestrator such as Airflow or Prefect, with a job queue (Celery/RQ) replacing the prototype's in-process background task. A failed gate stops scoring and keeps the last good results, marked stale.</td></tr>
+<tr><td><b>PostgreSQL</b></td><td>System of record for raw data, cleaning views and features, plus predictions and run history.</td><td>SQL stays central. Schema per workspace works for hundreds of tenants; very large tenants move to their own database. Add a pooler (PgBouncer) and read replicas for reports.</td></tr>
+<tr><td><b>Elasticsearch</b></td><td>Indexes what Postgres is bad at: support-ticket text (search, topic counts, a text feature for models), application and pipeline logs, and an audit trail of every AI summary with its facts and rejections.</td><td>Not the analytics store. The current data has no free text, so this is the first thing to add once ticket text is ingested; logs and the AI audit are useful immediately.</td></tr>
+<tr><td><b>Grafana</b></td><td>Dashboards and alerts for the people who run the platform: run success and duration, data-quality counts, PSI per feature over time, score distribution, model metrics once labels arrive, AI accepted / rejected / fallback rates.</td><td>Reads Postgres (a monitoring table written by each run) and Elasticsearch (logs). Managers keep reading the business report; Grafana is for operators. Thresholds are in <code>docs/monitoring_plan.md</code>.</td></tr>
+</table>
+
+<h2>3. Cross-cutting decisions</h2>
+<ul>
+<li><b>Security:</b> secrets in a secrets manager, not files; the AI key is read only by the adapter and never logged. Customer names, emails and phones never reach the AI (it sees aggregated facts only). Per-tenant topics, schemas and index aliases keep tenants apart; the server, not the client, decides the tenant. Auth moves to a shared session store, with throttling in Redis rather than process memory.</li>
+<li><b>Reproducibility:</b> seeds and library versions recorded in the model card; the registry stores model, training data hash and metrics, so any score can be traced to the run that produced it.</li>
+<li><b>Failure behaviour:</b> if the AI provider is down or its answer fails the checks, reports still ship with the template summary, labelled. If data quality fails, scoring stops rather than producing confident nonsense.</li>
+<li><b>Cost and scale:</b> feature SQL is the heavy part (the prototype fixed slow CTEs with <code>MATERIALIZED</code> and pre-aggregation); at scale features are computed incrementally per day and stored, and training runs on a worker, not the web process.</li>
+</ul>
+
+<h2>4. What I would build next</h2>
+<p>1) Finish the Snwolley adapter from its documentation. 2) A monitoring table plus a Grafana dashboard fed by each run. 3) Replace the background task with a queue and scheduler. 4) Kafka consumer for one source (payments) to prove the ingestion path. 5) Time-based train/test split and performance monitoring when labels mature.</p>
+</body></html>

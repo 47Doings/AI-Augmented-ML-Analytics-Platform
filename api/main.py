@@ -28,7 +28,7 @@ from pathlib import Path
 
 import psycopg
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from api import security, store
@@ -36,6 +36,7 @@ from api.schemas import DataIn, LoginIn, SignupIn, UseCaseIn
 from core.ai.insights import generate_insights
 from core.ai.snwolley_adapter import get_provider
 from core.config import get_settings
+from core.report import build_report_html
 from core.loader import LoaderError
 from core.logging_setup import configure_logging
 from core.ml_pipeline import MlError
@@ -67,7 +68,7 @@ async def security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "same-origin"
     if not request.url.path.startswith(("/docs", "/redoc", "/openapi")):
         # no inline scripts or styles, nothing loaded from other sites
-        response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'"
+        response.headers.setdefault("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'")
     return response
 
 
@@ -300,3 +301,16 @@ def regenerate_insights(use_case: str | None = None, ctx=Depends(current_context
     result = generate_insights(json.loads(path.read_text(encoding="utf-8")), load_use_case(uc_id), get_provider(get_settings()))
     path.with_name("insights.json").write_text(json.dumps(result, indent=2, allow_nan=False), encoding="utf-8")
     return result
+
+
+@app.get("/api/workspace/report", response_class=HTMLResponse)
+def report(use_case: str | None = None, ctx=Depends(current_context)):
+    """The printable business report for the latest run (use the browser's Print > Save as PDF)."""
+    path, _, _ = _validated_results_path(ctx, use_case)
+    if not path.is_file():
+        raise HTTPException(404, "No results yet. Run the analysis first.")
+    ins_file = path.with_name("insights.json")
+    ins = json.loads(ins_file.read_text(encoding="utf-8")) if ins_file.is_file() else None
+    html = build_report_html(json.loads(path.read_text(encoding="utf-8")), ins, ctx[1]["business_name"])
+    # The report is one self-contained page: inline <style> and inline SVG, nothing loaded, no scripts.
+    return HTMLResponse(html, headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"})

@@ -238,6 +238,7 @@ function renderResults(res) {
       <h2>${esc(res.use_case.name)}</h2>
       <p class="muted">${esc(res.use_case.business_question)}</p>
       <div class="kpis">${kpis}</div>
+      <p><a class="primary-link" href="/api/workspace/report" target="_blank" rel="noopener">Open business report (print it to PDF)</a></p>
       <div id="insights" class="insights"></div>
 
       <h3>Baseline vs better models</h3>

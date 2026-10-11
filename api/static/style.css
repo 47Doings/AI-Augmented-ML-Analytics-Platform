@@ -76,3 +76,5 @@ details { margin: 8px 0; } summary { cursor: pointer; padding: 6px 0; font-weigh
 .facts { font-size: 13px; color: var(--muted); padding-left: 18px; }
 .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); vertical-align: middle; margin-left: 6px; }
 .badge.ai { color: var(--good); } .badge.fallback { color: var(--warn); } .badge.none { color: var(--bad); }
+
+.primary-link { display: inline-block; padding: 7px 14px; border: 1px solid var(--accent); border-radius: 8px; color: var(--accent); text-decoration: none; font-weight: 600; }

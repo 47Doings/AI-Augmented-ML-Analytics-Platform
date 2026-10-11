@@ -131,7 +131,7 @@ def test_protected_routes_need_login(client):
 
     anon = TestClient(app)
     for method, path in [("get", "/api/me"), ("get", "/api/use-cases"), ("post", "/api/workspace/run"),
-                         ("get", "/api/workspace/results"), ("get", "/api/workspace/insights"), ("post", "/api/workspace/insights"), ("post", "/api/workspace/data"), ("put", "/api/workspace/use-case")]:
+                         ("get", "/api/workspace/results"), ("get", "/api/workspace/insights"), ("get", "/api/workspace/report"), ("post", "/api/workspace/insights"), ("post", "/api/workspace/data"), ("put", "/api/workspace/use-case")]:
         assert getattr(anon, method)(path).status_code == 401, path
     assert anon.get("/api/me", headers={"Authorization": "Bearer nonsense"}).status_code == 401
 
@@ -187,6 +187,9 @@ def test_full_flow_for_two_use_cases_and_tenant_isolation(make_user):
     assert ins["mode"] in ("fallback", "ai") and ins["validation"]["ok"] and ins["document"]["executive_summary"]
     assert ins["facts"] and "ws_" not in str(ins)
     assert any(st["id"] == "insights" and st["status"] == "done" for st in run["steps"])
+    rep = a.get("/api/workspace/report")
+    assert rep.status_code == 200 and "text/html" in rep.headers["content-type"]
+    assert "default-src 'none'" in rep.headers["content-security-policy"] and "Executive summary" in rep.text
     again = a.post("/api/workspace/insights")  # rewrite the text from the saved results, no re-run
     assert again.status_code == 200 and again.json()["document"]["executive_summary"]
 
@@ -203,6 +206,8 @@ def test_full_flow_for_two_use_cases_and_tenant_isolation(make_user):
     assert b.get("/api/workspace/results").status_code == 404
     assert b.get("/api/workspace/results", params={"use_case": "churn"}).status_code == 404
     assert b.get("/api/workspace/insights").status_code == 404
+    assert b.get("/api/workspace/report").status_code == 404
+    assert b.get("/api/workspace/report", params={"use_case": "churn"}).status_code == 404
     assert b.get("/api/workspace/insights", params={"use_case": "churn"}).status_code == 404
     assert b.post("/api/workspace/insights", params={"use_case": "churn"}).status_code == 404
     assert b.get("/api/workspace/insights", params={"use_case": "../../etc"}).status_code == 404
