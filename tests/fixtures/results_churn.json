@@ -1,0 +1,1940 @@
+{
+ "use_case": {
+  "id": "churn",
+  "name": "Customer Churn",
+  "problem_type": "classification",
+  "business_question": "Which active customers are most likely to cancel in the next 60 days, and what is driving it?",
+  "target": "churned",
+  "target_description": "1 if the customer's subscription was cancelled within label_window_days after cutoff_date, otherwise 0.",
+  "parameters": {
+   "cutoff_date": "2026-06-30",
+   "label_window_days": 60,
+   "data_end_date": "2026-09-30"
+  }
+ },
+ "training_table": {
+  "rows": 2403,
+  "positives": 202,
+  "positive_rate": 0.0841
+ },
+ "kpis": [
+  {
+   "id": "churn_rate",
+   "label": "Churn rate",
+   "value": 0.08406158967956721,
+   "format": "percent",
+   "shown": "8.4%"
+  },
+  {
+   "id": "monthly_revenue",
+   "label": "Monthly recurring revenue",
+   "value": 322445.0,
+   "format": "currency",
+   "shown": "GHS 322,445"
+  }
+ ],
+ "data_quality": {
+  "columns": [
+   "table_name",
+   "check_id",
+   "dimension",
+   "severity",
+   "issues",
+   "total",
+   "pct_affected",
+   "handling"
+  ],
+  "rows": [
+   [
+    "payments",
+    "payments.exact_duplicate_rows",
+    "uniqueness",
+    "high",
+    553.0,
+    55844,
+    0.99,
+    "Removed in clean_payments"
+   ],
+   [
+    "usage_monthly",
+    "usage_monthly.conflicting_duplicate_month_rows",
+    "uniqueness",
+    "high",
+    534.0,
+    53943,
+    0.99,
+    "Collapsed to one row per customer-month (keeps the original)"
+   ],
+   [
+    "customers",
+    "customers.accounts_without_subscription",
+    "integrity",
+    "high",
+    100.0,
+    5100,
+    1.96,
+    "Excluded: no subscription means nothing to predict"
+   ],
+   [
+    "customers",
+    "customers.duplicate_accounts_by_phone",
+    "uniqueness",
+    "high",
+    90.0,
+    5100,
+    1.76,
+    "Flagged is_duplicate in clean_customers; excluded from analysis"
+   ],
+   [
+    "payments",
+    "payments.paid_at_in_future",
+    "validity",
+    "high",
+    57.0,
+    55844,
+    0.1,
+    "Ignored: every analysis stops at the cutoff or export date"
+   ],
+   [
+    "subscriptions",
+    "subscriptions.cancelled_but_end_date_missing",
+    "completeness",
+    "high",
+    15.0,
+    5473,
+    0.27,
+    "Excluded from training: cancellation date unknown, label untrustworthy"
+   ],
+   [
+    "subscriptions",
+    "subscriptions.end_date_before_start_date",
+    "validity",
+    "high",
+    12.0,
+    5473,
+    0.22,
+    "End date set to unknown (NULL)"
+   ],
+   [
+    "usage_monthly",
+    "usage_monthly.missing_months_between_rows",
+    "completeness",
+    "medium",
+    1352.0,
+    53943,
+    2.51,
+    "Left as gaps; averages use the months that exist"
+   ],
+   [
+    "usage_monthly",
+    "usage_monthly.data_used_missing",
+    "completeness",
+    "medium",
+    815.0,
+    53943,
+    1.51,
+    "Left missing; averages skip it"
+   ],
+   [
+    "payments",
+    "payments.status_inconsistent_case",
+    "consistency",
+    "medium",
+    562.0,
+    55844,
+    1.01,
+    "Lower-cased"
+   ],
+   [
+    "customers",
+    "customers.region_inconsistent_spelling",
+    "consistency",
+    "medium",
+    408.0,
+    5100,
+    8.0,
+    "Mapped to 8 canonical regions"
+   ],
+   [
+    "payments",
+    "payments.amount_missing",
+    "completeness",
+    "medium",
+    280.0,
+    55844,
+    0.5,
+    "Filled with the plan price"
+   ],
+   [
+    "customers",
+    "customers.customer_type_inconsistent_case",
+    "consistency",
+    "medium",
+    204.0,
+    5100,
+    4.0,
+    "Lower-cased"
+   ],
+   [
+    "customers",
+    "customers.phone_missing",
+    "completeness",
+    "medium",
+    204.0,
+    5100,
+    4.0,
+    "Left missing; duplicates with no phone cannot be matched"
+   ],
+   [
+    "customers",
+    "customers.region_missing",
+    "completeness",
+    "medium",
+    153.0,
+    5100,
+    3.0,
+    "Set to Unknown"
+   ],
+   [
+    "payments",
+    "payments.amount_negative",
+    "validity",
+    "medium",
+    111.0,
+    55844,
+    0.2,
+    "Treated as invalid, filled with the plan price"
+   ],
+   [
+    "usage_monthly",
+    "usage_monthly.data_used_negative",
+    "validity",
+    "medium",
+    109.0,
+    53943,
+    0.2,
+    "Set to NULL"
+   ],
+   [
+    "customers",
+    "customers.acquisition_channel_missing",
+    "completeness",
+    "medium",
+    102.0,
+    5100,
+    2.0,
+    "Set to unknown"
+   ],
+   [
+    "support_tickets",
+    "support_tickets.exact_duplicate_rows",
+    "uniqueness",
+    "medium",
+    52.0,
+    6490,
+    0.8,
+    "Removed in clean_tickets"
+   ],
+   [
+    "support_tickets",
+    "support_tickets.resolved_before_opened",
+    "validity",
+    "medium",
+    39.0,
+    6490,
+    0.6,
+    "Resolution time set to unknown"
+   ],
+   [
+    "subscriptions",
+    "subscriptions.status_inconsistent_case",
+    "consistency",
+    "medium",
+    27.0,
+    5473,
+    0.49,
+    "Lower-cased"
+   ],
+   [
+    "payments",
+    "payments.method_inconsistent",
+    "consistency",
+    "low",
+    3355.0,
+    55844,
+    6.01,
+    "Normalised to momo/card/bank/cash"
+   ],
+   [
+    "customers",
+    "customers.birth_year_missing_individuals",
+    "completeness",
+    "low",
+    1363.0,
+    5100,
+    26.73,
+    "Left missing (not used by the model)"
+   ],
+   [
+    "customers",
+    "customers.phone_format_inconsistent",
+    "consistency",
+    "low",
+    1221.0,
+    5100,
+    23.94,
+    "Reduced to last 9 digits (phone_key)"
+   ],
+   [
+    "payments",
+    "payments.subscription_id_missing",
+    "integrity",
+    "low",
+    1119.0,
+    55844,
+    2.0,
+    "Kept; amount cannot be filled from a plan"
+   ],
+   [
+    "customers",
+    "customers.email_missing",
+    "completeness",
+    "low",
+    660.0,
+    5100,
+    12.94,
+    "Left missing (not used by the model)"
+   ],
+   [
+    "subscriptions",
+    "subscriptions.cancel_reason_missing",
+    "completeness",
+    "low",
+    634.0,
+    5473,
+    11.58,
+    "Left missing (reported as unknown)"
+   ],
+   [
+    "customers",
+    "customers.name_case_inconsistent",
+    "consistency",
+    "low",
+    369.0,
+    5100,
+    7.24,
+    "Title-cased"
+   ],
+   [
+    "support_tickets",
+    "support_tickets.category_inconsistent",
+    "consistency",
+    "low",
+    326.0,
+    6490,
+    5.02,
+    "Normalised to 5 categories"
+   ],
+   [
+    "support_tickets",
+    "support_tickets.priority_inconsistent_case",
+    "consistency",
+    "low",
+    260.0,
+    6490,
+    4.01,
+    "Lower-cased"
+   ],
+   [
+    "usage_monthly",
+    "usage_monthly.month_not_first_of_month",
+    "consistency",
+    "low",
+    162.0,
+    53943,
+    0.3,
+    "Normalised to the 1st"
+   ],
+   [
+    "usage_monthly",
+    "usage_monthly.active_days_over_31",
+    "validity",
+    "low",
+    161.0,
+    53943,
+    0.3,
+    "Set to NULL"
+   ],
+   [
+    "customers",
+    "customers.name_missing",
+    "completeness",
+    "low",
+    51.0,
+    5100,
+    1.0,
+    "Left missing"
+   ],
+   [
+    "support_tickets",
+    "support_tickets.satisfaction_out_of_range",
+    "validity",
+    "low",
+    36.0,
+    6490,
+    0.55,
+    "Set to NULL"
+   ],
+   [
+    "customers",
+    "customers.birth_year_implausible",
+    "validity",
+    "low",
+    31.0,
+    5100,
+    0.61,
+    "Set to NULL"
+   ]
+  ],
+  "total_rows": 35
+ },
+ "business_questions": {
+  "monthly_churn_trend": {
+   "columns": [
+    "month_start",
+    "new_customers",
+    "customers_at_start",
+    "churned",
+    "churn_rate_pct",
+    "churn_rate_3m_avg_pct",
+    "change_vs_prev_month"
+   ],
+   "rows": [
+    [
+     "2023-07-01",
+     45,
+     0,
+     0,
+     null,
+     null,
+     null
+    ],
+    [
+     "2023-08-01",
+     65,
+     45,
+     8,
+     17.78,
+     17.78,
+     8.0
+    ],
+    [
+     "2023-09-01",
+     63,
+     102,
+     7,
+     6.86,
+     12.32,
+     -1.0
+    ],
+    [
+     "2023-10-01",
+     81,
+     158,
+     16,
+     10.13,
+     11.59,
+     9.0
+    ],
+    [
+     "2023-11-01",
+     94,
+     223,
+     15,
+     6.73,
+     7.91,
+     -1.0
+    ],
+    [
+     "2023-12-01",
+     86,
+     302,
+     19,
+     6.29,
+     7.71,
+     4.0
+    ],
+    [
+     "2024-01-01",
+     98,
+     369,
+     20,
+     5.42,
+     6.15,
+     1.0
+    ],
+    [
+     "2024-02-01",
+     85,
+     447,
+     27,
+     6.04,
+     5.92,
+     7.0
+    ],
+    [
+     "2024-03-01",
+     111,
+     505,
+     25,
+     4.95,
+     5.47,
+     -2.0
+    ],
+    [
+     "2024-04-01",
+     93,
+     591,
+     43,
+     7.28,
+     6.09,
+     18.0
+    ],
+    [
+     "2024-05-01",
+     103,
+     641,
+     36,
+     5.62,
+     5.95,
+     -7.0
+    ],
+    [
+     "2024-06-01",
+     114,
+     708,
+     45,
+     6.36,
+     6.42,
+     9.0
+    ],
+    [
+     "2024-07-01",
+     142,
+     777,
+     56,
+     7.21,
+     6.39,
+     11.0
+    ],
+    [
+     "2024-08-01",
+     118,
+     863,
+     42,
+     4.87,
+     6.14,
+     -14.0
+    ],
+    [
+     "2024-09-01",
+     126,
+     939,
+     53,
+     5.64,
+     5.91,
+     11.0
+    ],
+    [
+     "2024-10-01",
+     121,
+     1012,
+     49,
+     4.84,
+     5.12,
+     -4.0
+    ],
+    [
+     "2024-11-01",
+     134,
+     1084,
+     52,
+     4.8,
+     5.09,
+     3.0
+    ],
+    [
+     "2024-12-01",
+     149,
+     1166,
+     59,
+     5.06,
+     4.9,
+     7.0
+    ],
+    [
+     "2025-01-01",
+     143,
+     1256,
+     76,
+     6.05,
+     5.3,
+     17.0
+    ],
+    [
+     "2025-02-01",
+     114,
+     1323,
+     73,
+     5.52,
+     5.54,
+     -3.0
+    ],
+    [
+     "2025-03-01",
+     146,
+     1364,
+     80,
+     5.87,
+     5.81,
+     7.0
+    ],
+    [
+     "2025-04-01",
+     136,
+     1430,
+     72,
+     5.03,
+     5.47,
+     -8.0
+    ],
+    [
+     "2025-05-01",
+     149,
+     1494,
+     84,
+     5.62,
+     5.51,
+     12.0
+    ],
+    [
+     "2025-06-01",
+     165,
+     1559,
+     68,
+     4.36,
+     5.01,
+     -16.0
+    ],
+    [
+     "2025-07-01",
+     147,
+     1656,
+     68,
+     4.11,
+     4.7,
+     0.0
+    ],
+    [
+     "2025-08-01",
+     149,
+     1735,
+     79,
+     4.55,
+     4.34,
+     11.0
+    ],
+    [
+     "2025-09-01",
+     144,
+     1805,
+     99,
+     5.48,
+     4.71,
+     20.0
+    ],
+    [
+     "2025-10-01",
+     164,
+     1850,
+     81,
+     4.38,
+     4.81,
+     -18.0
+    ],
+    [
+     "2025-11-01",
+     168,
+     1933,
+     90,
+     4.66,
+     4.84,
+     9.0
+    ],
+    [
+     "2025-12-01",
+     141,
+     2011,
+     109,
+     5.42,
+     4.82,
+     19.0
+    ],
+    [
+     "2026-01-01",
+     175,
+     2043,
+     98,
+     4.8,
+     4.96,
+     -11.0
+    ],
+    [
+     "2026-02-01",
+     149,
+     2120,
+     98,
+     4.62,
+     4.95,
+     0.0
+    ],
+    [
+     "2026-03-01",
+     170,
+     2171,
+     115,
+     5.3,
+     4.91,
+     17.0
+    ],
+    [
+     "2026-04-01",
+     160,
+     2226,
+     89,
+     4.0,
+     4.64,
+     -26.0
+    ],
+    [
+     "2026-05-01",
+     172,
+     2297,
+     102,
+     4.44,
+     4.58,
+     13.0
+    ],
+    [
+     "2026-06-01",
+     169,
+     2367,
+     133,
+     5.62,
+     4.69,
+     31.0
+    ],
+    [
+     "2026-07-01",
+     140,
+     2403,
+     110,
+     4.58,
+     4.88,
+     -23.0
+    ],
+    [
+     "2026-08-01",
+     177,
+     2433,
+     110,
+     4.52,
+     4.91,
+     0.0
+    ],
+    [
+     "2026-09-01",
+     68,
+     2500,
+     106,
+     4.24,
+     4.45,
+     -4.0
+    ]
+   ],
+   "total_rows": 39
+  },
+  "churn_by_plan": {
+   "columns": [
+    "plan_name",
+    "monthly_price_ghs",
+    "contract_months",
+    "customers",
+    "cancelled",
+    "churn_pct"
+   ],
+   "rows": [
+    [
+     "Starter 5GB",
+     35.0,
+     0,
+     1278,
+     789,
+     61.7
+    ],
+    [
+     "Basic 15GB",
+     70.0,
+     0,
+     1400,
+     808,
+     57.7
+    ],
+    [
+     "Home Fibre",
+     250.0,
+     12,
+     987,
+     402,
+     40.7
+    ],
+    [
+     "Standard 40GB",
+     120.0,
+     6,
+     1112,
+     452,
+     40.6
+    ],
+    [
+     "Business Pro",
+     400.0,
+     12,
+     197,
+     61,
+     31.0
+    ]
+   ],
+   "total_rows": 5
+  },
+  "churn_by_channel_region": {
+   "columns": [
+    "acquisition_channel",
+    "region",
+    "customers",
+    "cancelled",
+    "churn_pct",
+    "rank_in_channel"
+   ],
+   "rows": [
+    [
+     "agent",
+     "Northern",
+     47,
+     27,
+     57.4,
+     1
+    ],
+    [
+     "agent",
+     "Eastern",
+     113,
+     62,
+     54.9,
+     2
+    ],
+    [
+     "online",
+     "Northern",
+     68,
+     44,
+     64.7,
+     1
+    ],
+    [
+     "online",
+     "Central",
+     130,
+     83,
+     63.8,
+     2
+    ],
+    [
+     "referral",
+     "Eastern",
+     43,
+     22,
+     51.2,
+     1
+    ],
+    [
+     "referral",
+     "Ashanti",
+     158,
+     66,
+     41.8,
+     2
+    ],
+    [
+     "walk-in",
+     "Ashanti",
+     207,
+     107,
+     51.7,
+     1
+    ],
+    [
+     "walk-in",
+     "Eastern",
+     72,
+     35,
+     48.6,
+     2
+    ]
+   ],
+   "total_rows": 8
+  },
+  "tenure_at_churn": {
+   "columns": [
+    "tenure_bucket",
+    "churned_customers",
+    "pct_of_all_churn",
+    "cumulative_pct"
+   ],
+   "rows": [
+    [
+     "1: under 3 months",
+     961,
+     38.3,
+     38.3
+    ],
+    [
+     "2: 3-6 months",
+     501,
+     19.9,
+     58.2
+    ],
+    [
+     "3: 6-12 months",
+     576,
+     22.9,
+     81.1
+    ],
+    [
+     "4: 12+ months",
+     474,
+     18.9,
+     100.0
+    ]
+   ],
+   "total_rows": 4
+  },
+  "signals_by_outcome": {
+   "columns": [
+    "outcome",
+    "customers",
+    "avg_failed_payments_90d",
+    "avg_tickets_90d",
+    "avg_network_tickets_90d",
+    "avg_usage_change_pct",
+    "avg_data_gb_3m",
+    "avg_tenure_days"
+   ],
+   "rows": [
+    [
+     "cancels within the window",
+     202,
+     0.33,
+     0.52,
+     0.18,
+     -2.2,
+     22.1,
+     273.0
+    ],
+    [
+     "stays",
+     2201,
+     0.13,
+     0.29,
+     0.08,
+     7.1,
+     38.7,
+     379.0
+    ]
+   ],
+   "total_rows": 2
+  },
+  "high_risk_segments": {
+   "columns": [
+    "plan_name",
+    "tenure_band",
+    "customers",
+    "will_churn",
+    "churn_pct",
+    "times_the_average"
+   ],
+   "rows": [
+    [
+     "Starter 5GB",
+     "under 6 months",
+     204,
+     39,
+     19.1,
+     2.27
+    ],
+    [
+     "Basic 15GB",
+     "under 6 months",
+     205,
+     31,
+     15.1,
+     1.8
+    ],
+    [
+     "Basic 15GB",
+     "6-12 months",
+     136,
+     14,
+     10.3,
+     1.22
+    ],
+    [
+     "Business Pro",
+     "under 6 months",
+     30,
+     3,
+     10.0,
+     1.19
+    ],
+    [
+     "Home Fibre",
+     "under 6 months",
+     177,
+     17,
+     9.6,
+     1.14
+    ],
+    [
+     "Business Pro",
+     "6-12 months",
+     32,
+     3,
+     9.4,
+     1.12
+    ]
+   ],
+   "total_rows": 6
+  },
+  "monthly_revenue_trend": {
+   "columns": [
+    "month_start",
+    "revenue_ghs",
+    "successful_payments",
+    "failure_rate_pct",
+    "growth_pct",
+    "cumulative_revenue_ghs"
+   ],
+   "rows": [
+    [
+     "2023-07-01",
+     4960.0,
+     40,
+     4.76,
+     null,
+     4960.0
+    ],
+    [
+     "2023-08-01",
+     12315.0,
+     95,
+     2.06,
+     148.3,
+     17275.0
+    ],
+    [
+     "2023-09-01",
+     19580.0,
+     151,
+     10.12,
+     59.0,
+     36855.0
+    ],
+    [
+     "2023-10-01",
+     26675.0,
+     213,
+     5.75,
+     36.2,
+     63530.0
+    ],
+    [
+     "2023-11-01",
+     36120.0,
+     290,
+     7.05,
+     35.4,
+     99650.0
+    ],
+    [
+     "2023-12-01",
+     46480.0,
+     368,
+     5.64,
+     28.7,
+     146130.0
+    ],
+    [
+     "2024-01-01",
+     57395.0,
+     443,
+     3.9,
+     23.5,
+     203525.0
+    ],
+    [
+     "2024-02-01",
+     65380.0,
+     502,
+     5.64,
+     13.9,
+     268905.0
+    ],
+    [
+     "2024-03-01",
+     75840.0,
+     583,
+     5.97,
+     16.0,
+     344745.0
+    ],
+    [
+     "2024-04-01",
+     85670.0,
+     646,
+     5.69,
+     13.0,
+     430415.0
+    ],
+    [
+     "2024-05-01",
+     91380.0,
+     688,
+     6.14,
+     6.7,
+     521795.0
+    ],
+    [
+     "2024-06-01",
+     100920.0,
+     763,
+     5.22,
+     10.4,
+     622715.0
+    ],
+    [
+     "2024-07-01",
+     113110.0,
+     852,
+     5.33,
+     12.1,
+     735825.0
+    ],
+    [
+     "2024-08-01",
+     124045.0,
+     931,
+     5.1,
+     9.7,
+     859870.0
+    ],
+    [
+     "2024-09-01",
+     134000.0,
+     1007,
+     5.89,
+     8.0,
+     993870.0
+    ],
+    [
+     "2024-10-01",
+     143405.0,
+     1074,
+     5.46,
+     7.0,
+     1137275.0
+    ],
+    [
+     "2024-11-01",
+     156355.0,
+     1153,
+     4.79,
+     9.0,
+     1293630.0
+    ],
+    [
+     "2024-12-01",
+     167060.0,
+     1252,
+     5.01,
+     6.8,
+     1460690.0
+    ],
+    [
+     "2025-01-01",
+     175065.0,
+     1310,
+     5.42,
+     4.8,
+     1635755.0
+    ],
+    [
+     "2025-02-01",
+     183680.0,
+     1350,
+     6.9,
+     4.9,
+     1819435.0
+    ],
+    [
+     "2025-03-01",
+     191215.0,
+     1417,
+     5.66,
+     4.1,
+     2010650.0
+    ],
+    [
+     "2025-04-01",
+     200205.0,
+     1485,
+     5.29,
+     4.7,
+     2210855.0
+    ],
+    [
+     "2025-05-01",
+     209410.0,
+     1553,
+     5.88,
+     4.6,
+     2420265.0
+    ],
+    [
+     "2025-06-01",
+     217865.0,
+     1630,
+     5.45,
+     4.0,
+     2638130.0
+    ],
+    [
+     "2025-07-01",
+     230550.0,
+     1719,
+     5.96,
+     5.8,
+     2868680.0
+    ],
+    [
+     "2025-08-01",
+     241320.0,
+     1790,
+     6.09,
+     4.7,
+     3110000.0
+    ],
+    [
+     "2025-09-01",
+     249890.0,
+     1846,
+     6.29,
+     3.6,
+     3359890.0
+    ],
+    [
+     "2025-10-01",
+     258000.0,
+     1914,
+     5.67,
+     3.2,
+     3617890.0
+    ],
+    [
+     "2025-11-01",
+     265935.0,
+     1974,
+     6.75,
+     3.1,
+     3883825.0
+    ],
+    [
+     "2025-12-01",
+     276660.0,
+     2047,
+     5.19,
+     4.0,
+     4160485.0
+    ],
+    [
+     "2026-01-01",
+     279955.0,
+     2084,
+     5.7,
+     1.2,
+     4440440.0
+    ],
+    [
+     "2026-02-01",
+     288315.0,
+     2143,
+     5.05,
+     3.0,
+     4728755.0
+    ],
+    [
+     "2026-03-01",
+     299485.0,
+     2213,
+     5.63,
+     3.9,
+     5028240.0
+    ],
+    [
+     "2026-04-01",
+     305345.0,
+     2257,
+     5.88,
+     2.0,
+     5333585.0
+    ],
+    [
+     "2026-05-01",
+     318870.0,
+     2334,
+     6.08,
+     4.4,
+     5652455.0
+    ],
+    [
+     "2026-06-01",
+     322445.0,
+     2376,
+     6.31,
+     1.1,
+     5974900.0
+    ],
+    [
+     "2026-07-01",
+     324810.0,
+     2395,
+     6.08,
+     0.7,
+     6299710.0
+    ],
+    [
+     "2026-08-01",
+     335590.0,
+     2486,
+     5.01,
+     3.3,
+     6635300.0
+    ],
+    [
+     "2026-09-01",
+     336090.0,
+     2450,
+     4.89,
+     0.1,
+     6971390.0
+    ]
+   ],
+   "total_rows": 39
+  }
+ },
+ "model": {
+  "selected": "gradient_boosting",
+  "comparison": {
+   "columns": [
+    "model",
+    "role",
+    "cv_score",
+    "best_params",
+    "test_roc_auc",
+    "test_average_precision",
+    "test_precision",
+    "test_recall",
+    "test_f1",
+    "test_accuracy",
+    "test_lift",
+    "test_flagged",
+    "selected"
+   ],
+   "rows": [
+    [
+     "dummy_classifier",
+     "baseline",
+     0.5,
+     "{}",
+     0.5,
+     0.08316008316008316,
+     0.10204081632653061,
+     0.125,
+     0.11235955056179775,
+     0.8357588357588358,
+     1.2270408163265305,
+     49,
+     false
+    ],
+    [
+     "logistic_regression",
+     "candidate",
+     0.7440620695592287,
+     "{\"C\": 0.1}",
+     0.8073696145124717,
+     0.3737065870766976,
+     0.30612244897959184,
+     0.375,
+     0.33707865168539325,
+     0.8773388773388774,
+     3.6811224489795915,
+     49,
+     false
+    ],
+    [
+     "gradient_boosting",
+     "candidate",
+     0.7569744856232783,
+     "{\"max_depth\": 2, \"n_estimators\": 200}",
+     0.8081065759637187,
+     0.3927452460574893,
+     0.30612244897959184,
+     0.375,
+     0.33707865168539325,
+     0.8773388773388774,
+     3.6811224489795915,
+     49,
+     true
+    ]
+   ],
+   "total_rows": 3
+  },
+  "importance": {
+   "columns": [
+    "feature",
+    "kind",
+    "importance",
+    "std",
+    "clearly_matters",
+    "direction"
+   ],
+   "rows": [
+    [
+     "avg_active_days_3m",
+     "numeric",
+     0.05363,
+     0.01949,
+     true,
+     "higher value -> lower score"
+    ],
+    [
+     "avg_data_used_gb_3m",
+     "numeric",
+     0.03858,
+     0.01449,
+     true,
+     "higher value -> lower score"
+    ],
+    [
+     "usage_change_pct",
+     "numeric",
+     0.01272,
+     0.01225,
+     false,
+     "higher value -> lower score"
+    ],
+    [
+     "failed_payments_90d",
+     "numeric",
+     0.01226,
+     0.00845,
+     false,
+     "higher value -> higher score"
+    ],
+    [
+     "acquisition_channel",
+     "categorical",
+     0.01103,
+     0.00693,
+     false,
+     "highest score: online; lowest: referral"
+    ],
+    [
+     "avg_resolution_hours_90d",
+     "numeric",
+     0.01056,
+     0.00811,
+     false,
+     "higher value -> higher score"
+    ],
+    [
+     "tenure_days",
+     "numeric",
+     0.00401,
+     0.00639,
+     false,
+     "higher value -> lower score"
+    ],
+    [
+     "tickets_90d",
+     "numeric",
+     0.00372,
+     0.00237,
+     false,
+     "higher value -> higher score"
+    ],
+    [
+     "network_tickets_90d",
+     "numeric",
+     0.00173,
+     0.00318,
+     false,
+     "higher value -> higher score"
+    ],
+    [
+     "region",
+     "categorical",
+     0.00117,
+     0.00118,
+     false,
+     "highest score: Central; lowest: Western"
+    ],
+    [
+     "plan_name",
+     "categorical",
+     0.00086,
+     0.00511,
+     false,
+     "highest score: Starter 5GB; lowest: Home Fibre"
+    ],
+    [
+     "contract_months",
+     "numeric",
+     0.00071,
+     0.00105,
+     false,
+     "higher value -> lower score"
+    ],
+    [
+     "monthly_price_ghs",
+     "numeric",
+     0.00048,
+     0.0021,
+     false,
+     "higher value -> lower score"
+    ],
+    [
+     "avg_satisfaction",
+     "numeric",
+     0.00027,
+     0.001,
+     false,
+     "higher value -> lower score"
+    ],
+    [
+     "customer_type",
+     "categorical",
+     0.0,
+     0.0,
+     false,
+     "highest score: individual; lowest: business"
+    ]
+   ],
+   "total_rows": 15
+  },
+  "card": {
+   "use_case": "churn",
+   "problem_type": "classification",
+   "target": "churned",
+   "primary_metric": "roc_auc",
+   "seed": 42,
+   "rows": {
+    "total": 2403,
+    "train": 1922,
+    "test": 481
+   },
+   "positive_rate": {
+    "train": 0.084287,
+    "test": 0.08316
+   },
+   "features": {
+    "numeric": [
+     "tenure_days",
+     "monthly_price_ghs",
+     "contract_months",
+     "avg_data_used_gb_3m",
+     "usage_change_pct",
+     "avg_active_days_3m",
+     "failed_payments_90d",
+     "tickets_90d",
+     "network_tickets_90d",
+     "avg_resolution_hours_90d",
+     "avg_satisfaction"
+    ],
+    "categorical": [
+     "plan_name",
+     "region",
+     "acquisition_channel",
+     "customer_type"
+    ]
+   },
+   "selected_model": "gradient_boosting",
+   "selected_params": {
+    "max_depth": 2,
+    "n_estimators": 200
+   },
+   "baseline_model": "dummy_classifier",
+   "cv_score": {
+    "baseline": 0.5,
+    "selected": 0.756974
+   },
+   "beats_baseline_in_cv": true,
+   "operating_point": {
+    "flag_top_fraction": 0.1
+   },
+   "test_metrics": {
+    "roc_auc": 0.808107,
+    "average_precision": 0.392745,
+    "precision": 0.306122,
+    "recall": 0.375,
+    "f1": 0.337079,
+    "accuracy": 0.877339,
+    "lift": 3.681122,
+    "flagged": 49
+   },
+   "data_sha256": "ebff5cadb57b74ee4a2802a7b5b59d1aa4ab89f7b06c5392ee47e1bcd2f53e60",
+   "parameters": {
+    "cutoff_date": "2026-06-30",
+    "label_window_days": 60,
+    "data_end_date": "2026-09-30"
+   },
+   "versions": {
+    "python": "3.13.16",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5"
+   },
+   "notes": [
+    "Final model is trained on the train split only; the test split was never used to choose anything.",
+    "Split is random (stratified), not by time. See README limitations.",
+    "scores.csv uses out-of-fold predictions: each entity is scored by a model that did not see it."
+   ]
+  },
+  "deciles": {
+   "columns": [
+    "risk_decile",
+    "entities",
+    "positives",
+    "rate"
+   ],
+   "rows": [
+    [
+     10,
+     241,
+     78,
+     0.3237
+    ],
+    [
+     9,
+     240,
+     35,
+     0.1458
+    ],
+    [
+     8,
+     240,
+     23,
+     0.0958
+    ],
+    [
+     7,
+     241,
+     17,
+     0.0705
+    ],
+    [
+     6,
+     240,
+     9,
+     0.0375
+    ],
+    [
+     5,
+     240,
+     13,
+     0.0542
+    ],
+    [
+     4,
+     241,
+     12,
+     0.0498
+    ],
+    [
+     3,
+     240,
+     3,
+     0.0125
+    ],
+    [
+     2,
+     240,
+     6,
+     0.025
+    ],
+    [
+     1,
+     240,
+     6,
+     0.025
+    ]
+   ],
+   "total_rows": 10
+  },
+  "top_entities": {
+   "columns": [
+    "customer_id",
+    "score"
+   ],
+   "rows": [
+    [
+     4542,
+     0.8869
+    ],
+    [
+     603,
+     0.8754
+    ],
+    [
+     4615,
+     0.8746
+    ],
+    [
+     423,
+     0.847
+    ],
+    [
+     3761,
+     0.7724
+    ],
+    [
+     1365,
+     0.7635
+    ],
+    [
+     2059,
+     0.7621
+    ],
+    [
+     4694,
+     0.7574
+    ],
+    [
+     4866,
+     0.7479
+    ],
+    [
+     1778,
+     0.7324
+    ],
+    [
+     4959,
+     0.726
+    ],
+    [
+     3586,
+     0.7217
+    ],
+    [
+     195,
+     0.7146
+    ],
+    [
+     1159,
+     0.7145
+    ],
+    [
+     4043,
+     0.6943
+    ]
+   ],
+   "total_rows": 15
+  }
+ },
+ "drift": {
+  "later_cutoff": "2026-08-31",
+  "entities": 2500,
+  "columns": [
+   "variable",
+   "kind",
+   "psi",
+   "status"
+  ],
+  "rows": [
+   [
+    "usage_change_pct",
+    "numeric",
+    0.0154,
+    "stable"
+   ],
+   [
+    "MODEL SCORE",
+    "score",
+    0.0123,
+    "stable"
+   ],
+   [
+    "tenure_days",
+    "numeric",
+    0.0099,
+    "stable"
+   ],
+   [
+    "avg_resolution_hours_90d",
+    "numeric",
+    0.0094,
+    "stable"
+   ],
+   [
+    "avg_active_days_3m",
+    "numeric",
+    0.0052,
+    "stable"
+   ],
+   [
+    "avg_satisfaction",
+    "numeric",
+    0.0035,
+    "stable"
+   ],
+   [
+    "avg_data_used_gb_3m",
+    "numeric",
+    0.0033,
+    "stable"
+   ],
+   [
+    "region",
+    "categorical",
+    0.0013,
+    "stable"
+   ],
+   [
+    "failed_payments_90d",
+    "numeric",
+    0.0013,
+    "stable"
+   ],
+   [
+    "acquisition_channel",
+    "categorical",
+    0.0009,
+    "stable"
+   ],
+   [
+    "plan_name",
+    "categorical",
+    0.0008,
+    "stable"
+   ],
+   [
+    "tickets_90d",
+    "numeric",
+    0.0002,
+    "stable"
+   ],
+   [
+    "monthly_price_ghs",
+    "numeric",
+    0.0001,
+    "stable"
+   ],
+   [
+    "contract_months",
+    "numeric",
+    0.0001,
+    "stable"
+   ],
+   [
+    "customer_type",
+    "categorical",
+    0.0001,
+    "stable"
+   ],
+   [
+    "network_tickets_90d",
+    "numeric",
+    0.0,
+    "stable"
+   ]
+  ],
+  "total_rows": 16
+ },
+ "steps": [
+  {
+   "id": "clean_layer",
+   "label": "Clean layer (views)",
+   "status": "done",
+   "seconds": 0.0,
+   "detail": null
+  },
+  {
+   "id": "data_quality",
+   "label": "Data-quality checks",
+   "status": "done",
+   "seconds": 0.3,
+   "detail": "35 of 35 checks found problems"
+  },
+  {
+   "id": "training_table",
+   "label": "Training table",
+   "status": "done",
+   "seconds": 1.0,
+   "detail": "2,403 rows, 202 positives (8.4%)"
+  },
+  {
+   "id": "business_questions",
+   "label": "Business questions",
+   "status": "done",
+   "seconds": 3.7,
+   "detail": "7 questions"
+  },
+  {
+   "id": "kpis",
+   "label": "KPIs",
+   "status": "done",
+   "seconds": 0.0,
+   "detail": "2 KPIs"
+  },
+  {
+   "id": "model",
+   "label": "Model training and explanation",
+   "status": "done",
+   "seconds": 16.3,
+   "detail": "selected gradient_boosting"
+  },
+  {
+   "id": "monitoring",
+   "label": "Drift check",
+   "status": "done",
+   "seconds": 1.0,
+   "detail": "0 of 16 variables moved"
+  },
+  {
+   "id": "insights",
+   "label": "AI insights (checked against the numbers)",
+   "status": "done",
+   "seconds": 0.0,
+   "detail": "template summary (no AI provider answered)"
+  }
+ ]
+}

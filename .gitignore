@@ -1,0 +1,20 @@
+# Secrets: never commit
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Generated at runtime
+outputs/
+data/

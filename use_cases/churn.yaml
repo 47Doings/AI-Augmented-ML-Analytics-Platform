@@ -1,0 +1,131 @@
+# Use case: customer churn
+#
+# This file is the ONLY place that says "this platform run is about churn".
+# The platform reads it and runs the same pipeline it would run for any
+# other use case.
+#
+# SQL files:
+#   sql/common/   describe the dataset and are shared between use cases
+#   sql/churn/    belong to this use case
+# The feature names below must match the column names that
+# sql/churn/training_table.sql returns; the platform checks this when it
+# builds the training table.
+
+id: churn
+name: Customer Churn
+description: >
+  Predict which subscribers are likely to cancel, so the retention team can
+  act before they leave.
+business_question: >
+  Which active customers are most likely to cancel in the next 60 days,
+  and what is driving it?
+
+problem_type: classification
+
+entity:
+  name: customer
+  key: customer_id
+
+target:
+  name: churned
+  description: >
+    1 if the customer's subscription was cancelled within label_window_days
+    after cutoff_date, otherwise 0.
+
+# Passed into the SQL files as named parameters.
+# Features are built ONLY from data on or before cutoff_date. The label looks
+# at the label_window_days AFTER it. This is what prevents leakage.
+# data_end_date is the day the data was exported.
+parameters:
+  cutoff_date: "2026-06-30"
+  label_window_days: 60
+  data_end_date: "2026-09-30"
+
+sql:
+  training_table: sql/churn/training_table.sql
+  data_quality: sql/common/data_quality.sql
+  business_questions: sql/churn/business_questions.sql
+
+features:
+  numeric:
+    - tenure_days
+    - monthly_price_ghs
+    - contract_months
+    - avg_data_used_gb_3m
+    - usage_change_pct
+    - avg_active_days_3m
+    - failed_payments_90d
+    - tickets_90d
+    - network_tickets_90d
+    - avg_resolution_hours_90d
+    - avg_satisfaction
+  categorical:
+    - plan_name
+    - region
+    - acquisition_channel
+    - customer_type
+
+models:
+  baseline: dummy_classifier
+  candidates:
+    - logistic_regression
+    - gradient_boosting
+
+metrics:
+  primary: roc_auc
+  report:
+    - roc_auc
+    - precision
+    - recall
+    - f1
+
+evaluation:
+  test_size: 0.2
+  random_seed: 42
+  flag_top_fraction: 0.10   # retention team can call the riskiest 10% each month
+
+kpis:
+  - id: churn_rate
+    label: Churn rate
+    sql: sql/churn/kpi_churn_rate.sql
+    format: percent
+  - id: monthly_revenue
+    label: Monthly recurring revenue
+    sql: sql/common/kpi_monthly_revenue.sql
+    format: currency
+
+ai:
+  audience: Head of Customer Retention (non-technical)
+  goal: >
+    Decide which customer groups to target with retention offers this month.
+  glossary:
+    churn: A customer whose subscription was cancelled.
+    tenure: How long the customer has been with the company.
+  allowed_recommendation_types:
+    - retention_offer
+    - outreach_priority
+    - service_fix
+  # Used only when no AI provider is available. Wording is business-specific, so it lives
+  # here; the platform code stays generic. Each text is checked by the same guardrails as
+  # AI output. Placeholder: {<fact id>.<field>|<format>}.
+  fallback_recommendations:
+    - type: outreach_priority
+      facts: [decile.top, decile.top2_share]
+      text: >-
+        Start retention calls with the customers the model scores in its riskiest decile:
+        {decile.top.rate|pct0} of them were actually lost, against {decile.top.base_rate|pct0}
+        across all customers ({decile.top.lift|x1} the average). The top two deciles hold
+        {decile.top2_share.share|pct0} of all lost customers.
+    - type: retention_offer
+      facts: [model.test, model.flag]
+      text: >-
+        Offer retention deals to the riskiest {model.flag.fraction|pct0} of customers each
+        month. On held-out data this list catches {model.test.recall|pct0} of the customers who
+        leave, and {model.test.precision|pct0} of the people on it do leave, so expect most
+        calls to go to customers who would have stayed anyway.
+    - type: service_fix
+      facts: [driver.1, driver.2]
+      text: >-
+        Look first at {driver.1.name} and {driver.2.name}: they are the two signals most
+        strongly associated with who leaves in this model. Check whether a service or billing
+        process behind them can be improved. The data shows association only; it does not explain why customers leave.

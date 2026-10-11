@@ -1,0 +1,116 @@
+# Use case: revenue forecast (per customer, next 30 days)
+#
+# Same platform, same pipeline, different business question. Compared with
+# churn.yaml only the content changes: the problem type is regression, the
+# target is an amount, the SQL points at sql/revenue/, and the metrics are errors
+# in cedis. No platform code is specific to either use case.
+
+id: revenue
+name: Customer Revenue Forecast
+description: >
+  Forecast how much each active customer will pay in the next 30 days, so finance
+  can plan cash flow and spot customers likely to pay less than their plan price.
+business_question: >
+  How much money will each active customer pay in the next 30 days, and where are
+  we likely to collect less than we expect?
+
+problem_type: regression
+
+entity:
+  name: customer
+  key: customer_id
+
+target:
+  name: revenue_next_30d
+  description: >
+    Total of the customer's successful payments (in Ghana cedis) made within
+    label_window_days after cutoff_date. 0 if they paid nothing.
+
+parameters:
+  cutoff_date: "2026-06-30"
+  label_window_days: 30
+  data_end_date: "2026-09-30"
+
+sql:
+  training_table: sql/revenue/training_table.sql
+  data_quality: sql/common/data_quality.sql
+  business_questions: sql/revenue/business_questions.sql
+
+features:
+  numeric:
+    - tenure_days
+    - monthly_price_ghs
+    - contract_months
+    - successful_payments_90d
+    - failed_payments_90d
+    - reversed_payments_90d
+    - avg_billed_ghs_90d
+    - days_since_last_payment
+    - avg_data_used_gb_3m
+    - avg_active_days_3m
+    - tickets_90d
+    - avg_satisfaction
+  categorical:
+    - plan_name
+    - region
+    - acquisition_channel
+    - customer_type
+    - last_payment_method
+
+models:
+  baseline: dummy_regressor
+  candidates:
+    - linear_regression
+    - gradient_boosting_regressor
+
+# r2 is the single number that picks the model (higher is better).
+# mae / rmse are in cedis: "on average the forecast is off by this much".
+metrics:
+  primary: r2
+  report:
+    - r2
+    - mae
+    - rmse
+
+evaluation:
+  test_size: 0.2
+  random_seed: 42
+
+kpis:
+  - id: monthly_revenue
+    label: Monthly recurring revenue
+    sql: sql/common/kpi_monthly_revenue.sql
+    format: currency
+  - id: payment_failure_rate
+    label: Payment failure rate
+    sql: sql/revenue/kpi_payment_failure_rate.sql
+    format: percent
+
+ai:
+  audience: Finance Manager (non-technical)
+  goal: >
+    Understand expected cash collection for the next 30 days and decide where to
+    chase failed payments.
+  glossary:
+    revenue: Money from successful payments, in Ghana cedis (GHS).
+    shortfall: Plan list price minus what the customer actually paid.
+  allowed_recommendation_types:
+    - payment_follow_up
+    - billing_fix
+    - cash_flow_plan
+  # Used only when no AI provider is available (see churn.yaml for the idea).
+  fallback_recommendations:
+    - type: payment_follow_up
+      facts: [kpi.payment_failure_rate]
+      text: >-
+        Chase failed payments: {kpi.payment_failure_rate.value|pct1} of payment attempts failed
+        in the last full month. Prioritise customers with failed or reversed payments in their
+        recent history.
+    - type: cash_flow_plan
+      facts: [bq.forecast_vs_list_price.last, model.test]
+      text: >-
+        Plan cash on what customers actually pay, not on list price: across all plans customers
+        paid {bq.forecast_vs_list_price.last.actual_ghs|ghs0} against
+        {bq.forecast_vs_list_price.last.expected_ghs|ghs0} at list price, a shortfall of
+        {bq.forecast_vs_list_price.last.shortfall_pct|n1}%. The model's forecast of next-month payments is typically off
+        by about {model.test.mae|ghs0} per customer.

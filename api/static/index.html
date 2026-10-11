@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analytics Platform</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">Analytics Platform <span class="tag">prototype</span></div>
+    <div id="who" class="who" hidden></div>
+  </header>
+
+  <main>
+    <!-- logged out -->
+    <section id="auth" class="card narrow" hidden>
+      <div class="tabs" role="tablist">
+        <button id="tab-signup" class="tab active" type="button">Create workspace</button>
+        <button id="tab-login" class="tab" type="button">Log in</button>
+      </div>
+      <form id="form-signup" autocomplete="on">
+        <label>Business name <input name="business_name" required minlength="2" maxlength="80" autocomplete="organization"></label>
+        <label>Email <input name="email" type="email" required autocomplete="email"></label>
+        <label>Password (8+ characters) <input name="password" type="password" required minlength="8" maxlength="128" autocomplete="new-password"></label>
+        <button class="primary" type="submit">Create my workspace</button>
+      </form>
+      <form id="form-login" autocomplete="on" hidden>
+        <label>Email <input name="email" type="email" required autocomplete="email"></label>
+        <label>Password <input name="password" type="password" required maxlength="128" autocomplete="current-password"></label>
+        <button class="primary" type="submit">Log in</button>
+      </form>
+      <p id="auth-msg" class="msg" role="alert"></p>
+    </section>
+
+    <!-- logged in -->
+    <div id="app" hidden>
+      <section class="card">
+        <h2>1. Choose what to analyse</h2>
+        <p class="muted">Each use case is a configuration file plus SQL. The platform code is the same for all of them.</p>
+        <div id="usecases" class="choices"></div>
+      </section>
+
+      <section class="card">
+        <h2>2. Get data</h2>
+        <p class="muted">Generates a synthetic subscription business (with deliberate data problems) and loads it into your private workspace.</p>
+        <div class="row">
+          <label class="inline">Customers <input id="customers" type="number" min="1000" max="5000" step="500" value="5000"></label>
+          <button id="btn-data" class="primary" type="button">Generate and load data</button>
+        </div>
+        <p id="data-msg" class="msg" role="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>3. Run the analysis</h2>
+        <p class="muted">Cleaning, data-quality checks, SQL analysis, model training, explanation and drift check.</p>
+        <button id="btn-run" class="primary" type="button">Run analysis</button>
+        <ol id="steps" class="steps"></ol>
+        <p id="run-msg" class="msg" role="status"></p>
+      </section>
+
+      <section id="results" hidden></section>
+    </div>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
