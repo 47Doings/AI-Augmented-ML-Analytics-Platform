@@ -164,3 +164,13 @@ everything it shows; AI output is validated before display.
 - **PSI on small samples** is noisy; thresholds are common conventions, not tuned.
 - **Snwolley is not integrated yet** (above).
 - Notebook covers the churn case only.
+
+## What I would improve with more time
+
+1. Finish the Snwolley integration from its documentation (one method in the adapter), and show the real AI badge in the report.
+2. Replace the random train/test split with a time-based split, and add performance monitoring once outcomes arrive.
+3. Add business-readable labels for features and models in the summary and report, defined per use case.
+4. Write each run's metrics (PSI, data-quality counts, durations, AI accepted/rejected) to a monitoring table with a Grafana dashboard.
+5. Replace the in-process background task and in-memory login throttle with a job queue and a scheduler.
+6. Prove the ingestion path with a Kafka consumer for one source (payments), and add Elasticsearch once ticket text is ingested.
+7. Add a CSRF token, email verification and password reset, and a notebook for the revenue use case.
