@@ -1,0 +1,76 @@
+{
+  "generator": "datagen.telecom",
+  "seed": 42,
+  "n_customers_before_duplicates": 5000,
+  "data_window": {
+    "first_signup": "2023-07-01",
+    "last_signup": "2026-09-15",
+    "data_end": "2026-09-30"
+  },
+  "versions": {
+    "numpy": "2.5.3",
+    "pandas": "3.0.5"
+  },
+  "row_counts": {
+    "plans": 5,
+    "customers": 5100,
+    "subscriptions": 5473,
+    "payments": 55844,
+    "usage_monthly": 53943,
+    "support_tickets": 6490
+  },
+  "injected_issues": {
+    "customers.duplicate_person_rows": 100,
+    "customers.region_missing": 153,
+    "customers.region_inconsistent_spelling": 408,
+    "customers.email_missing": 612,
+    "customers.phone_missing": 204,
+    "customers.phone_format_inconsistent": 1221,
+    "customers.birth_year_missing_individuals": 1363,
+    "customers.birth_year_implausible": 31,
+    "customers.name_missing": 51,
+    "customers.name_case_inconsistent": 306,
+    "customers.customer_type_inconsistent_case": 204,
+    "customers.acquisition_channel_missing": 102,
+    "subscriptions.cancelled_but_end_date_missing": 15,
+    "subscriptions.cancel_reason_missing": 634,
+    "subscriptions.end_date_before_start_date": 12,
+    "subscriptions.status_inconsistent_case": 27,
+    "subscriptions.active_marked_suspended": 37,
+    "payments.amount_missing": 276,
+    "payments.amount_negative": 111,
+    "payments.method_inconsistent": 3317,
+    "payments.status_inconsistent_case": 553,
+    "payments.subscription_id_missing": 1106,
+    "payments.paid_at_in_future": 55,
+    "payments.exact_duplicate_rows": 553,
+    "usage_monthly.months_missing": 1652,
+    "usage_monthly.data_used_missing": 801,
+    "usage_monthly.data_used_negative": 107,
+    "usage_monthly.active_days_over_31": 160,
+    "usage_monthly.month_not_first_of_month": 160,
+    "usage_monthly.conflicting_duplicate_month_rows": 534,
+    "support_tickets.resolved_before_opened": 39,
+    "support_tickets.satisfaction_out_of_range": 36,
+    "support_tickets.category_inconsistent": 322,
+    "support_tickets.priority_inconsistent_case": 258,
+    "support_tickets.exact_duplicate_rows": 52
+  },
+  "ground_truth": {
+    "cutoff_date": "2026-06-30",
+    "label_window_days": 60,
+    "customers_existing_at_cutoff": 4614,
+    "active_at_cutoff": 2405,
+    "churned_in_window": 203,
+    "churn_rate_in_window": 0.0844,
+    "note": "Computed from the clean simulation BEFORE mess was injected. Use it to check the SQL label logic."
+  },
+  "file_sha256": {
+    "plans.csv": "cf13ce19f9e43516e6ea65497decfe5815a7e3ad221df6efb2f4f0102f33844c",
+    "customers.csv": "977bb056ba7472f0fb5f85feb594f2b567fba4debe4d2e3a14940558e9b38608",
+    "subscriptions.csv": "3e9b83f1d48fbb1aa32559d858e0bf9902414fb0067a49feefcc08343e2d9ee9",
+    "payments.csv": "7805e41590d2b484044f6046464187d3e1f130faeededd3a06a3af6e5e0df24e",
+    "usage_monthly.csv": "d5bdc7e91cc5bb18dc66b0c537cca0918706c3236065388ae63a7fc3cc69315c",
+    "support_tickets.csv": "91e06eda8e7c73722fb96c79a88e856bee59ce7261aaafb3fb0ece7a6ca30705"
+  }
+}

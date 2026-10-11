@@ -1,0 +1,6 @@
+plan_id,plan_name,monthly_price_ghs,data_cap_gb,contract_months
+1,Starter 5GB,35.0,5,0
+2,Basic 15GB,70.0,15,0
+3,Standard 40GB,120.0,40,6
+4,Home Fibre,250.0,,12
+5,Business Pro,400.0,,12
