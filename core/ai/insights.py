@@ -34,7 +34,7 @@ from core.use_case import UseCase
 
 logger = logging.getLogger(__name__)
 MAX_ERRORS_KEPT = 8
-NOT_CONFIGURED = "No AI provider is configured (set SNWOLLEY_API_KEY and SNWOLLEY_BASE_URL in .env)."
+NOT_CONFIGURED = "No AI provider is configured (set SNWOLLEY_API_KEY in .env)."
 
 
 def parse_reply(text: str) -> InsightDoc:

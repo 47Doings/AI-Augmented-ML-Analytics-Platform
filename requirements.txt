@@ -14,4 +14,4 @@ jupyterlab>=4.0
 fastapi>=0.110
 uvicorn>=0.29
 PyJWT>=2.8
-httpx>=0.27          # used by FastAPI's TestClient in tests/test_api.py
+httpx>=0.27          # Snwolley API calls (core/ai/snwolley_adapter.py) and FastAPI TestClient

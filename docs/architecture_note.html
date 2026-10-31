@@ -25,14 +25,14 @@ svg text{font:9.5px system-ui,sans-serif;fill:#1c2430}.t{font-weight:600}.m{fill
 <text x="250" y="44">1 clean views (SQL)</text><text x="250" y="58">2 data-quality checks</text><text x="250" y="72">3 training table</text><text x="250" y="86">4 business questions, KPIs</text><text x="250" y="100">5 ML + drift (PSI)</text><text x="250" y="114">6 AI insights + guardrails</text><text class="m" x="250" y="132">use case = YAML + SQL files</text>
 <text class="t" x="480" y="38" text-anchor="middle">PostgreSQL</text><text class="m" x="480" y="51" text-anchor="middle">platform + ws_&lt;id&gt; schemas</text>
 <text class="t" x="480" y="106" text-anchor="middle">results.json</text><text class="m" x="480" y="119" text-anchor="middle">+ insights.json</text>
-<text class="t" x="665" y="38" text-anchor="middle">Snwolley adapter</text><text class="m" x="665" y="51" text-anchor="middle">placeholder, key from env</text>
+<text class="t" x="665" y="38" text-anchor="middle">Snwolley adapter</text><text class="m" x="665" y="51" text-anchor="middle">key from env, 429 retry</text>
 <text class="t" x="665" y="106" text-anchor="middle">Page + business report</text><text class="m" x="665" y="119" text-anchor="middle">read only the JSON files</text>
 </svg>
 <ul>
 <li><b>Multi-tenancy:</b> one Postgres schema per workspace (name chosen by the server, never the client); platform tables (users, workspaces, runs) in their own schema. A partial unique index allows only one running analysis per workspace.</li>
 <li><b>Generic by configuration:</b> the platform code never mentions churn or revenue. A use case is a YAML file and SQL files; two ship (classification and regression).</li>
 <li><b>Traceability:</b> <code>results.json</code> is the single record of a run. The AI summary and the report read only that record, so every number can be traced to SQL or the ML step.</li>
-<li><b>AI behind an adapter:</b> the Snwolley call lives in one file. The AI only sees a numbered facts sheet; its output is checked (citations, numbers, causal wording, allowed recommendation types) and falls back to a labelled template.</li>
+<li><b>AI behind an adapter:</b> the Snwolley call lives in one file (one message per request, 5 requests/minute limit handled with a Retry-After wait and one retry). The AI only sees a numbered facts sheet; its output is checked (citations, numbers, causal wording, allowed recommendation types) and falls back to a labelled template.</li>
 </ul>
 
 <h2>2. Production architecture</h2>
@@ -73,5 +73,5 @@ svg text{font:9.5px system-ui,sans-serif;fill:#1c2430}.t{font-weight:600}.m{fill
 </ul>
 
 <h2>4. What I would build next</h2>
-<p>1) Finish the Snwolley adapter from its documentation. 2) A monitoring table plus a Grafana dashboard fed by each run. 3) Replace the background task with a queue and scheduler. 4) Kafka consumer for one source (payments) to prove the ingestion path. 5) Time-based train/test split and performance monitoring when labels mature.</p>
+<p>1) A monitoring table plus a Grafana dashboard fed by each run. 2) Replace the background task with a queue and scheduler (also smooths the AI rate limit). 3) Kafka consumer for one source (payments) to prove the ingestion path. 4) Time-based train/test split and performance monitoring when labels mature. 5) An "ask about this run" box for the agent.</p>
 </body></html>

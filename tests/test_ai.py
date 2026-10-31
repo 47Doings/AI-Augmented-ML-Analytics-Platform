@@ -1,4 +1,4 @@
-"""Tests for the AI layer (Step 8). No database and no network needed.
+"""Tests for the AI layer. No database and no network needed.
 
 They run on real results.json files saved from actual pipeline runs (tests/fixtures), and use
 small fake providers to play the part of an AI that behaves well, invents numbers, returns
@@ -287,26 +287,124 @@ def test_missing_parts_of_a_run_do_not_break_the_template(case):
     assert out["mode"] == "fallback" and out["validation"]["ok"]
 
 
-# ------------------------------------------------------------------ the Snwolley placeholder
+# ------------------------------------------------------------------ the Snwolley adapter
+# (replace the whole old section from "# ---- the Snwolley placeholder" down to, but NOT including,
+#  "# ---- the use-case config")
+import httpx
+
+from core.ai.snwolley_adapter import DEFAULT_URL
+
+
 def _settings(**kw):
     base = {"postgres_password": "x", "app_secret_key": "k" * 40}
     return Settings(_env_file=None, **{**base, **kw})
+
+
+def _adapter(handler, **kw):
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    return SnwolleyAdapter("sk-secret-abc", None, client=client, sleep=lambda s: None, **kw)
 
 
 def test_no_key_means_no_provider():
     assert get_provider(_settings()) is None
 
 
-def test_placeholder_adapter_says_it_is_not_implemented_and_never_shows_the_key(case):
-    uc, results = case
-    s = _settings(snwolley_api_key="sk-secret-abc", snwolley_base_url="https://example.invalid")
-    provider = get_provider(s)
+def test_key_alone_configures_the_provider_with_the_default_url():
+    provider = get_provider(_settings(snwolley_api_key="sk-secret-abc"))
     assert isinstance(provider, SnwolleyAdapter) and "sk-secret-abc" not in repr(provider)
-    with pytest.raises(ProviderUnavailable, match="not implemented"):
-        provider.generate("s", "u", {})
-    out = generate_insights(results, uc, provider)
-    assert out["mode"] == "fallback" and "not implemented" in out["reason"]
-    assert "sk-secret-abc" not in json.dumps(out)
+    assert provider._url == DEFAULT_URL
+
+
+def test_request_shape_headers_and_body():
+    seen = {}
+
+    def handler(request):
+        seen["url"] = str(request.url)
+        seen["key"] = request.headers["X-API-Key"]
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"response": "hello"})
+
+    assert _adapter(handler).generate("SYS", "USER", {}) == "hello"
+    assert seen["url"] == DEFAULT_URL and seen["key"] == "sk-secret-abc"
+    assert seen["body"]["stream"] is False and "SYS" in seen["body"]["message"] and "USER" in seen["body"]["message"]
+
+
+@pytest.mark.parametrize("payload", [
+    {"response": "x"}, {"message": "x"}, {"content": "x"}, {"text": "x"}, {"answer": "x"},
+    {"choices": [{"message": {"content": "x"}}]}, {"data": 1, "output": {"content": "x"}},
+])
+def test_reply_text_is_found_in_common_shapes(payload):
+    assert _adapter(lambda r: httpx.Response(200, json=payload)).generate("s", "u", {}) == "x"
+
+
+def test_plain_text_body_is_used_as_is():
+    assert _adapter(lambda r: httpx.Response(200, text="plain answer")).generate("s", "u", {}) == "plain answer"
+
+
+def test_unrecognised_shape_is_unavailable():
+    with pytest.raises(ProviderUnavailable, match="unrecognised"):
+        _adapter(lambda r: httpx.Response(200, json={"foo": 1})).generate("s", "u", {})
+
+
+def test_429_waits_then_retries_once():
+    calls, waits = [], []
+
+    def handler(request):
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(429, headers={"Retry-After": "23"}, json={"error": "Too many requests. Please try again in 23 seconds."})
+        return httpx.Response(200, json={"response": "ok"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    adapter = SnwolleyAdapter("k", None, client=client, sleep=waits.append)
+    assert adapter.generate("s", "u", {}) == "ok"
+    assert len(calls) == 2 and waits == [24.0]
+
+
+def test_429_twice_gives_up_with_a_short_message():
+    def handler(request):
+        return httpx.Response(429, headers={"Retry-After": "5"}, json={"error": "Too many requests."})
+
+    with pytest.raises(ProviderUnavailable, match="rate limit"):
+        _adapter(handler).generate("s", "u", {})
+
+
+def test_429_with_a_huge_wait_does_not_block():
+    waits = []
+    client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(429, headers={"Retry-After": "600"})))
+    adapter = SnwolleyAdapter("k", None, client=client, sleep=waits.append, max_wait=60)
+    with pytest.raises(ProviderUnavailable, match="rate limit"):
+        adapter.generate("s", "u", {})
+    assert waits == []
+
+
+def test_401_and_500_and_timeout_and_network_errors_are_unavailable_and_never_leak_the_key():
+    def timeout(request):
+        raise httpx.ReadTimeout("slow sk-secret-abc")
+
+    def netfail(request):
+        raise httpx.ConnectError("no route sk-secret-abc")
+
+    cases = [(lambda r: httpx.Response(401, json={"error": "bad key"}), "401"),
+             (lambda r: httpx.Response(500, text="boom"), "500"),
+             (timeout, "timed out"), (netfail, "network error")]
+    for handler, text in cases:
+        with pytest.raises(ProviderUnavailable, match=text) as info:
+            _adapter(handler).generate("s", "u", {})
+        assert "sk-secret-abc" not in str(info.value)
+
+
+def test_end_to_end_good_reply_is_accepted_and_bad_reply_falls_back(case):
+    uc, results = case
+    good = json.dumps(good_reply(uc, results))
+    ok = generate_insights(results, uc, _adapter(lambda r: httpx.Response(200, json={"response": good})))
+    assert ok["mode"] == "ai" and ok["provider"] == "snwolley"
+
+    bad = generate_insights(results, uc, _adapter(lambda r: httpx.Response(200, json={"response": "I think churn is bad."})))
+    assert bad["mode"] == "fallback" and "sk-secret-abc" not in json.dumps(bad)
+
+    down = generate_insights(results, uc, _adapter(lambda r: httpx.Response(401)))
+    assert down["mode"] == "fallback" and "401" in down["reason"]
 
 
 # ------------------------------------------------------------------ the use-case config

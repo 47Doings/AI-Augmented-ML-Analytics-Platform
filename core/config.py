@@ -38,10 +38,10 @@ class Settings(BaseSettings):
     session_hours: int = 12  # how long a login stays valid
 
     # --- Snwolley Agent API Toolkit ---
-    # Placeholders until Npontu provides the real docs. Optional for now,
-    # so the rest of the platform runs without them.
+    # Only the key is needed: the endpoint defaults to the one in the assignment brief.
+    # Without a key the platform still runs and shows the labelled template summary.
     snwolley_api_key: SecretStr | None = None
-    snwolley_base_url: str | None = None
+    snwolley_base_url: str | None = "https://v1.snwolley.ai/v1/chat/completions/assignment"
 
     # --- Logging ---
     log_level: str = "INFO"
@@ -74,7 +74,7 @@ class Settings(BaseSettings):
 
     @property
     def snwolley_configured(self) -> bool:
-        return self.snwolley_api_key is not None and self.snwolley_base_url is not None
+        return self.snwolley_api_key is not None
 
     def safe_summary(self) -> dict[str, str]:
         """Settings in a form that is safe to print or log (no secret values)."""
@@ -82,8 +82,8 @@ class Settings(BaseSettings):
             "postgres": f"{self.postgres_user}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}",
             "postgres_password": "set",
             "app_secret_key": "set",
-            "snwolley_api_key": "set" if self.snwolley_api_key else "NOT SET (placeholder mode)",
-            "snwolley_base_url": self.snwolley_base_url or "NOT SET (placeholder mode)",
+            "snwolley_api_key": "set" if self.snwolley_api_key else "NOT SET (template summary only)",
+            "snwolley_base_url": self.snwolley_base_url or "default endpoint",
             "log_level": self.log_level,
         }
 
