@@ -19,7 +19,7 @@ WHAT IS LEFT OUT ON PURPOSE
 
 FACT IDS
     kpi.<id>                 headline numbers
-    scope                    what question this run answers, and that the data is synthetic
+    scope                    what question this run answers, and where the data came from (demo or uploaded)
     model.compare            selected model vs baseline on the held-out test set
     model.test               every test metric of the selected model
     model.baseline           every test metric of the baseline
@@ -106,12 +106,16 @@ def build_facts(results: dict, uc: UseCase) -> list[Fact]:
     add = facts.append
     ucinfo = results["use_case"]
 
+    uploaded = ucinfo.get("data_source") == "upload"
+    source_text = ("The data is a file uploaded by the business; it was not independently verified."
+                   if uploaded else "The data is synthetic demo data, not a real business.")
     add(Fact(
         "scope",
         f"Use case '{clean_text(ucinfo['name'])}'. Question: {clean_text(ucinfo['business_question'], 300)} "
-        f"Target: {clean_text(ucinfo['target_description'], 300)} The data is synthetic demo data, not a real business.",
+        f"Target: {clean_text(ucinfo['target_description'], 300)} {source_text}",
         values={k: float(v) for k, v in ucinfo.get("parameters", {}).items() if k.endswith("_days") and _num(v) is not None},
-        labels={"use_case": clean_text(ucinfo["name"]), "data_source": "synthetic demo data", "target": clean_text(ucinfo["target"])},
+        labels={"use_case": clean_text(ucinfo["name"]), "data_source": "uploaded by the business" if uploaded else "synthetic demo data",
+                "target": clean_text(ucinfo["target"])},
     ))
 
     for k in results.get("kpis", []):

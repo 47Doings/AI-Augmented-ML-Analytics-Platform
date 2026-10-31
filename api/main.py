@@ -4,10 +4,16 @@ Run from the project root:
     uvicorn api.main:app --reload
 then open http://127.0.0.1:8000  (interactive API docs: /docs)
 
-THE FLOW
+THE FLOW (two ways to get data into a workspace)
     POST /api/signup            business signs up -> account + workspace (own DB schema)
+  demo business:
     PUT  /api/workspace/use-case  choose which use case (YAML) the workspace works on
     POST /api/workspace/data    generate synthetic data and load it into the workspace
+  the business's own data:
+    PUT  /api/workspace/upload  send a CSV (raw request body) -> checked, profiled, loaded
+    GET  /api/workspace/upload  what the uploaded file contains
+    PUT  /api/workspace/custom-use-case  the column choices (target, inputs ...) -> use case 'custom'
+  then, for either:
     POST /api/workspace/run     start the analysis pipeline (runs in the background)
     GET  /api/workspace/run     progress of the latest run
     GET  /api/workspace/results the finished results
@@ -28,21 +34,27 @@ from pathlib import Path
 
 import psycopg
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import ValidationError
 from fastapi.staticfiles import StaticFiles
 
 from api import security, store
 from api.schemas import DataIn, LoginIn, SignupIn, UseCaseIn
+from core import upload as uploads
+from core.ai.facts import clean_text
 from core.ai.insights import generate_insights
 from core.ai.snwolley_adapter import get_provider
 from core.config import get_settings
+from core.custom_usecase import CUSTOM_ID, Mapping, MappingError, build_custom_use_case
 from core.report import build_report_html
 from core.loader import LoaderError
 from core.logging_setup import configure_logging
 from core.ml_pipeline import MlError
 from core.pipeline import initial_steps, load_synthetic_data, run_pipeline
 from core.sql_runner import SqlError
-from core.use_case import UseCaseError, list_use_cases, load_use_case
+from core.upload import UploadError
+from core.use_case import UseCase, UseCaseError, list_use_cases, load_use_case
 
 logger = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
@@ -106,6 +118,23 @@ def _jsonable_run(run: dict | None) -> dict | None:
     return {**run, "started_at": run["started_at"].isoformat(), "finished_at": run["finished_at"].isoformat() if run["finished_at"] else None}
 
 
+def resolve_use_case(ws: dict, use_case_id: str) -> UseCase:
+    """The use case for this workspace: a YAML file, or 'custom' = the business's own column choices."""
+    if use_case_id == CUSTOM_ID:
+        if not ws["custom_mapping"] or not ws["upload_profile"]:
+            raise UseCaseError("Upload your data and choose its columns first")
+        try:
+            return build_custom_use_case(Mapping.model_validate(ws["custom_mapping"]), ws["upload_profile"])
+        except (MappingError, ValidationError) as exc:
+            raise UseCaseError(str(exc)) from exc
+    return load_use_case(use_case_id)
+
+
+def _valid_use_case_id(use_case_id: str) -> str:
+    """An id that is safe to put in a file path: 'custom' or the id of a real use-case file."""
+    return CUSTOM_ID if use_case_id == CUSTOM_ID else load_use_case(use_case_id).id
+
+
 # ------------------------------------------------------------------ pages
 @app.get("/", include_in_schema=False)
 def index():
@@ -157,12 +186,19 @@ def logout(response: Response):
 def me(ctx=Depends(current_context)):
     user, ws = ctx
     results = [p.parent.name for p in (store.OUTPUT_ROOT / ws["schema_name"]).glob("*/results.json")]
+    own = ws["use_case_id"] == CUSTOM_ID  # working on the business's own data
+    profile = ws["upload_profile"]
     return {
         "email": user["email"],
         "business_name": ws["business_name"],
         "use_case_id": ws["use_case_id"],
-        "data_loaded": ws["data_loaded_at"] is not None,
-        "data_rows": ws["data_rows"],
+        # "data loaded" means: ready for the data source the chosen use case needs
+        "data_loaded": bool(profile and ws["custom_mapping"]) if own else ws["data_loaded_at"] is not None,
+        "data_rows": {"records": profile["rows"]} if own and profile else ws["data_rows"],
+        "upload": None if not profile else {
+            "filename": profile.get("filename", ""), "rows": profile["rows"], "columns": len(profile["columns"]),
+        },
+        "custom_mapping": ws["custom_mapping"],
         "latest_run": _jsonable_run(store.latest_run(ws["workspace_id"])),
         "results_available": sorted(results),
     }
@@ -200,6 +236,8 @@ def generate_data(body: DataIn, ctx=Depends(current_context)):
     _, ws = ctx
     if not ws["use_case_id"]:
         raise HTTPException(409, "Choose a use case first")
+    if ws["use_case_id"] == CUSTOM_ID:
+        raise HTTPException(409, "You are working on your own data. Pick a demo use case to generate demo data.")
     _require_idle(ws)
     uc = load_use_case(ws["use_case_id"])
     try:
@@ -212,12 +250,71 @@ def generate_data(body: DataIn, ctx=Depends(current_context)):
     return {"rows": counts}
 
 
+def _ingest_upload(schema: str, data: bytes) -> dict:
+    """Parse, profile and load an uploaded file (runs in a worker thread)."""
+    df, original = uploads.parse_csv(data)
+    profile = uploads.profile_frame(df, original)
+    uploads.load_upload(schema, df)
+    return profile
+
+
+@app.put("/api/workspace/upload")
+async def upload_data(request: Request, filename: str = "", ctx=Depends(current_context)):
+    """The business's own data: the CSV is the raw request body. Nothing about it is trusted until it passes upload.py."""
+    _, ws = ctx
+    _require_idle(ws)
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > uploads.MAX_BYTES:
+        raise HTTPException(413, f"The file is larger than {uploads.MAX_BYTES // (1024 * 1024)} MB.")
+    chunks, size = [], 0
+    async for chunk in request.stream():  # stop reading as soon as the limit is passed
+        size += len(chunk)
+        if size > uploads.MAX_BYTES:
+            raise HTTPException(413, f"The file is larger than {uploads.MAX_BYTES // (1024 * 1024)} MB.")
+        chunks.append(chunk)
+    try:
+        profile = await run_in_threadpool(_ingest_upload, ws["schema_name"], b"".join(chunks))
+    except UploadError as exc:
+        raise HTTPException(422, str(exc))
+    except (LoaderError, psycopg.Error):
+        logger.exception("Upload failed for workspace %s", ws["schema_name"])
+        raise HTTPException(500, "Could not load the file")
+    profile["filename"] = clean_text(filename, 80)
+    store.set_upload(ws["workspace_id"], profile)
+    shutil.rmtree(store.OUTPUT_ROOT / ws["schema_name"] / CUSTOM_ID, ignore_errors=True)  # old results describe an old file
+    return profile
+
+
+@app.get("/api/workspace/upload")
+def uploaded_profile(ctx=Depends(current_context)):
+    _, ws = ctx
+    if not ws["upload_profile"]:
+        raise HTTPException(404, "No file uploaded yet")
+    return ws["upload_profile"]
+
+
+@app.put("/api/workspace/custom-use-case")
+def save_custom_use_case(body: Mapping, ctx=Depends(current_context)):
+    """The business's column choices. The use case (and its SQL) is rebuilt from them on every run."""
+    _, ws = ctx
+    _require_idle(ws)
+    if not ws["upload_profile"]:
+        raise HTTPException(409, "Upload a file first")
+    try:
+        uc = build_custom_use_case(body, ws["upload_profile"])
+    except MappingError as exc:
+        raise HTTPException(422, str(exc))
+    store.set_custom_mapping(ws["workspace_id"], body.model_dump())
+    shutil.rmtree(store.OUTPUT_ROOT / ws["schema_name"] / CUSTOM_ID, ignore_errors=True)
+    return {"use_case_id": uc.id, "numeric_inputs": len(uc.features.numeric), "category_inputs": len(uc.features.categorical)}
+
+
 def _execute_run(run_id: int, schema: str, uc, out_dir: Path) -> None:
     """Runs in the background after the HTTP response has been sent."""
     try:
         run_pipeline(schema, uc, out_dir, on_progress=lambda steps: store.update_steps(run_id, steps))
         store.finish_run(run_id, "succeeded")
-    except (SqlError, MlError, LoaderError, UseCaseError, ValueError) as exc:
+    except (SqlError, MlError, LoaderError, UseCaseError, UploadError, MappingError, ValueError) as exc:
         logger.warning("Run %s failed: %s", run_id, exc)
         store.finish_run(run_id, "failed", str(exc)[:500])
     except psycopg.Error as exc:
@@ -233,9 +330,12 @@ def start_run(background: BackgroundTasks, ctx=Depends(current_context)):
     _, ws = ctx
     if not ws["use_case_id"]:
         raise HTTPException(409, "Choose a use case first")
-    if not ws["data_loaded_at"]:
+    try:
+        uc = resolve_use_case(ws, ws["use_case_id"])
+    except UseCaseError as exc:
+        raise HTTPException(409, str(exc))
+    if uc.data_source == "demo" and not ws["data_loaded_at"]:
         raise HTTPException(409, "Generate the data first")
-    uc = load_use_case(ws["use_case_id"])
     try:
         run_id = store.start_run(ws["workspace_id"], uc.id, initial_steps())
     except store.RunInProgress:
@@ -257,7 +357,7 @@ def results(use_case: str | None = None, ctx=Depends(current_context)):
     if not uc_id:
         raise HTTPException(404, "No results yet")
     try:
-        uc_id = load_use_case(uc_id).id  # validated id; never used in a path before this check
+        uc_id = _valid_use_case_id(uc_id)  # validated id; never used in a path before this check
     except UseCaseError:
         raise HTTPException(404, "Unknown use case")
     path = _results_path(ws["schema_name"], uc_id)
@@ -273,7 +373,7 @@ def _validated_results_path(ctx, use_case: str | None) -> tuple[Path, str, str]:
     if not uc_id:
         raise HTTPException(404, "No results yet")
     try:
-        uc_id = load_use_case(uc_id).id
+        uc_id = _valid_use_case_id(uc_id)
     except UseCaseError:
         raise HTTPException(404, "Unknown use case")
     return _results_path(ws["schema_name"], uc_id), ws["schema_name"], uc_id
@@ -298,7 +398,11 @@ def regenerate_insights(use_case: str | None = None, ctx=Depends(current_context
     path, _, uc_id = _validated_results_path(ctx, use_case)
     if not path.is_file():
         raise HTTPException(404, "No results yet. Run the analysis first.")
-    result = generate_insights(json.loads(path.read_text(encoding="utf-8")), load_use_case(uc_id), get_provider(get_settings()))
+    try:
+        uc = resolve_use_case(ctx[1], uc_id)
+    except UseCaseError as exc:
+        raise HTTPException(409, str(exc))
+    result = generate_insights(json.loads(path.read_text(encoding="utf-8")), uc, get_provider(get_settings()))
     path.with_name("insights.json").write_text(json.dumps(result, indent=2, allow_nan=False), encoding="utf-8")
     return result
 

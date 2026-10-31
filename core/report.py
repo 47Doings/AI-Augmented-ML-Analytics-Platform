@@ -118,6 +118,10 @@ def _items(items: list[dict]) -> str:
     return f'<ul class="items">{"".join(lis)}</ul>'
 
 
+def _source_label(res: dict) -> str:
+    return "file uploaded by the business" if res["use_case"].get("data_source") == "upload" else "synthetic demo data"
+
+
 # ------------------------------------------------------------------ sections
 def _insights_html(ins: dict | None) -> str:
     if not ins or not ins.get("document"):
@@ -195,7 +199,7 @@ def _appendix_html(res: dict, ins: dict | None) -> str:
                    "".join(f"<tr><td><b>{_e(f['id'])}</b></td><td>{_e(f['text'])}</td></tr>" for f in ins["facts"]) + "</tbody></table>")
     v = card.get("versions", {})
     out.append(f'<p class="note">Rows: {card["rows"]["train"]:,} train, {card["rows"]["test"]:,} test. Seed {card["seed"]}. '
-               f'Libraries: {_e(", ".join(f"{k} {x}" for k, x in v.items()))}. Data source: synthetic demo data.</p>')
+               f'Libraries: {_e(", ".join(f"{k} {x}" for k, x in v.items()))}. Data source: {_e(_source_label(res))}.</p>')
     if ins:
         out.append(f'<p class="note">Summary provider: {_e(str(ins.get("provider")))}; generated {_e(str(ins.get("generated_at", "")))}.</p>')
     return "".join(out)
@@ -209,7 +213,8 @@ def build_report_html(results: dict, insights: dict | None = None, business_name
     body = [
         f"<h1>{_e(uc['name'])}: business report</h1>",
         f'<p class="sub">{_e(uc["business_question"])}</p>',
-        f'<p class="note">Prepared{who} on {date.today().isoformat()}. Data: synthetic demo business. Data window ends {_e(str(uc["parameters"].get("data_end_date", "n/a")))}.</p>',
+        f'<p class="note">Prepared{who} on {date.today().isoformat()}. Data: {_e(_source_label(results))}.'
+        + (f' Data window ends {_e(str(uc["parameters"]["data_end_date"]))}.' if uc["parameters"].get("data_end_date") else "") + "</p>",
         f'<div class="kpis">{kpis}</div>',
         _insights_html(insights),
         _model_html(results),

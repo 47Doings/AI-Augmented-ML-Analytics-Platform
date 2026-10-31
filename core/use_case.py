@@ -63,6 +63,21 @@ class Target(_Strict):
     description: str  # plain-English definition (also given to the AI later)
 
 
+class InlineSql(_Strict):
+    """SQL written by the platform itself (not read from sql/*.sql).
+
+    Used for a business's own uploaded data: the platform generates the SQL from the column mapping
+    the business chose. The browser never sends SQL; the server builds these strings from validated,
+    quoted column names (core/custom_usecase.py).
+    """
+
+    clean_layer: str  # CREATE VIEW ... that cleans the uploaded table (the 'clean layer')
+    training_table: str  # one SELECT, one row per entity
+    data_quality: str | None = None  # one SELECT returning the standard data-quality columns
+    business_questions: dict[str, str] = Field(default_factory=dict)  # {query name: SELECT}
+    kpis: dict[str, str] = Field(default_factory=dict)  # {kpi id: SELECT returning one number}
+
+
 class SqlPaths(_Strict):
     training_table: str
     data_quality: str | None = None
@@ -99,13 +114,13 @@ class Evaluation(_Strict):
 class Kpi(_Strict):
     id: str
     label: str
-    sql: str
+    sql: str | None = None  # path under sql/; left empty when the use case carries inline_sql
     format: Literal["number", "percent", "currency"] = "number"
 
     @field_validator("sql")
     @classmethod
-    def _safe_sql(cls, value: str) -> str:
-        return _check_sql_path(value)
+    def _safe_sql(cls, value: str | None) -> str | None:
+        return value if value is None else _check_sql_path(value)
 
 
 class FallbackRecommendation(_Strict):
@@ -150,7 +165,11 @@ class UseCase(_Strict):
     target: Target
     # Named values passed into the SQL files, e.g. the cutoff date.
     parameters: dict[str, str | int | float] = Field(default_factory=dict)
-    sql: SqlPaths
+    # Exactly one of these: SQL files written by a developer (the demo use cases) or SQL the platform
+    # generated for an uploaded dataset.
+    sql: SqlPaths | None = None
+    inline_sql: InlineSql | None = None
+    data_source: Literal["demo", "upload"] = "demo"  # where the rows came from; shown in reports and given to the AI
     features: Features
     models: Models
     metrics: Metrics
@@ -167,6 +186,13 @@ class UseCase(_Strict):
 
     @model_validator(mode="after")
     def _check_consistency(self) -> "UseCase":
+        if (self.sql is None) == (self.inline_sql is None):
+            raise ValueError("exactly one of 'sql' (files) or 'inline_sql' (generated) is required")
+        for kpi in self.kpis:
+            if self.inline_sql is not None and kpi.id not in self.inline_sql.kpis:
+                raise ValueError(f"kpi '{kpi.id}' has no query in inline_sql.kpis")
+            if self.sql is not None and kpi.sql is None:
+                raise ValueError(f"kpi '{kpi.id}' needs a 'sql' path")
         feature_cols = self.features.numeric + self.features.categorical
         if not feature_cols:
             raise ValueError("features: at least one numeric or categorical feature is required")

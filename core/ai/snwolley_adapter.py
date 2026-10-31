@@ -118,7 +118,7 @@ class SnwolleyAdapter:
         for attempt in (1, 2):
             try:
                 resp = self._post(message)
-            except httpx.TimeoutException as exc:
+            except httpx.TimeoutException:
                 raise ProviderUnavailable("Snwolley request timed out.") from None
             except httpx.HTTPError as exc:
                 raise ProviderUnavailable(f"Snwolley network error ({type(exc).__name__}).") from None

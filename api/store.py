@@ -97,14 +97,15 @@ def get_context(user_id: int) -> tuple[dict, dict] | None:
     with connect() as conn, conn.cursor(row_factory=dict_row) as cur:
         row = cur.execute(
             "SELECT u.user_id, u.email, w.workspace_id, w.business_name, w.schema_name, w.use_case_id, "
-            "       w.data_rows, w.data_loaded_at "
+            "       w.data_rows, w.data_loaded_at, w.upload_profile, w.upload_loaded_at, w.custom_mapping "
             "FROM platform.users u JOIN platform.workspaces w ON w.user_id = u.user_id WHERE u.user_id = %s",
             (user_id,),
         ).fetchone()
     if not row:
         return None
     user = {"user_id": row["user_id"], "email": row["email"]}
-    ws = {k: row[k] for k in ("workspace_id", "business_name", "schema_name", "use_case_id", "data_rows", "data_loaded_at")}
+    ws = {k: row[k] for k in ("workspace_id", "business_name", "schema_name", "use_case_id", "data_rows", "data_loaded_at",
+                              "upload_profile", "upload_loaded_at", "custom_mapping")}
     return user, ws
 
 
@@ -119,6 +120,25 @@ def set_data_loaded(workspace_id: int, counts: dict[str, int]) -> None:
         conn.execute(
             "UPDATE platform.workspaces SET data_rows = %s, data_loaded_at = now() WHERE workspace_id = %s",
             (Jsonb(counts), workspace_id),
+        )
+
+
+def set_upload(workspace_id: int, profile: dict) -> None:
+    """Record a new upload. Column choices made for the previous file no longer apply, so they are cleared."""
+    with connect() as conn:
+        conn.execute(
+            "UPDATE platform.workspaces SET upload_profile = %s, upload_loaded_at = now(), custom_mapping = NULL, "
+            "use_case_id = CASE WHEN use_case_id = 'custom' THEN NULL ELSE use_case_id END WHERE workspace_id = %s",
+            (Jsonb(profile), workspace_id),
+        )
+
+
+def set_custom_mapping(workspace_id: int, mapping: dict) -> None:
+    """Save the business's column choices and make 'custom' the workspace's use case."""
+    with connect() as conn:
+        conn.execute(
+            "UPDATE platform.workspaces SET custom_mapping = %s, use_case_id = 'custom' WHERE workspace_id = %s",
+            (Jsonb(mapping), workspace_id),
         )
 
 

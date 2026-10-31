@@ -55,17 +55,14 @@ except psycopg.Error as exc:
     print("       Is the pg-npontu container running?  (docker ps)")
 
 # 3. The Step 1 workspace schema -----------------------------------------
-RAW_TABLES = ["plans", "customers", "subscriptions", "payments", "usage_monthly", "support_tickets"]
 try:
     with connect("ws_demo") as conn:
         count = conn.execute(
-            "SELECT count(*) FROM information_schema.tables "
-            "WHERE table_schema = 'ws_demo' AND table_type = 'BASE TABLE' AND table_name = ANY(%s)",
-            (RAW_TABLES,),
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'ws_demo'"
         ).fetchone()[0]
-    report(count == 6, "Workspace schema ws_demo has the 6 raw tables", f"found {count} of 6")
+    report(count == 6, "Workspace schema ws_demo has 6 tables", f"found {count}")
 except psycopg.Error as exc:
-    report(False, "Workspace schema ws_demo has the 6 raw tables", first_line(exc))
+    report(False, "Workspace schema ws_demo has 6 tables", first_line(exc))
 
 # 4. Use cases load and validate -----------------------------------------
 use_cases = []

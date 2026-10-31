@@ -36,6 +36,13 @@ def apply_sql_file(schema: str, path: Path) -> None:
         conn.execute(path.read_text(encoding="utf-8"))
 
 
+def apply_sql_text(schema: str, text: str) -> None:
+    """Run SQL text the platform generated itself (never text that came from a user) inside a workspace schema."""
+    validate_schema_name(schema)
+    with connect(schema) as conn:
+        conn.execute(text)
+
+
 def ensure_workspace_schema(schema: str, schema_sql: Path, clean_views_sql: Path | None = None) -> bool:
     """Create the schema and its tables if they do not exist yet, then (re)apply the clean-layer views.
 

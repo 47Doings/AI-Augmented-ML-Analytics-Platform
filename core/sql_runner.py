@@ -108,6 +108,42 @@ def run_named(schema: str, relative_path: str, params: dict | None = None, name:
     return {n: run_query(schema, q, params) for n, q in queries.items()}
 
 
+# ---- where a use case's queries come from: files (demo use cases) or generated SQL (uploaded data)
+def training_body(use_case: UseCase) -> str:
+    """The one SELECT that builds the training table."""
+    if use_case.inline_sql is not None:
+        return use_case.inline_sql.training_table.strip().rstrip(";")
+    queries = load_named_queries(use_case.sql.training_table)
+    if len(queries) != 1:
+        raise SqlError("The training-table file must contain exactly one query")
+    return next(iter(queries.values()))
+
+
+def named_queries(use_case: UseCase, kind: str) -> dict[str, str]:
+    """{name: SELECT} for 'data_quality' or 'business_questions' (empty when the use case has none)."""
+    if kind not in ("data_quality", "business_questions"):
+        raise ValueError(f"unknown query kind {kind!r}")
+    if use_case.inline_sql is not None:
+        inline = use_case.inline_sql
+        if kind == "data_quality":
+            return {"data_quality": inline.data_quality.strip().rstrip(";")} if inline.data_quality else {}
+        return dict(inline.business_questions)
+    path = getattr(use_case.sql, kind)
+    return load_named_queries(path) if path else {}
+
+
+def kpi_query(use_case: UseCase, kpi) -> str:
+    if use_case.inline_sql is not None:
+        return use_case.inline_sql.kpis[kpi.id].strip().rstrip(";")
+    queries = load_named_queries(kpi.sql)
+    return next(iter(queries.values()))
+
+
+def run_queries(schema: str, queries: dict[str, str], params: dict | None = None) -> dict[str, pd.DataFrame]:
+    """Run already-loaded queries (see named_queries) in a workspace. Returns {name: DataFrame}."""
+    return {name: run_query(schema, query, params) for name, query in queries.items()}
+
+
 def build_training_set(schema: str, use_case: UseCase) -> dict:
     """Materialise the use case's training query as the table `training_set` in the workspace.
 
@@ -116,10 +152,7 @@ def build_training_set(schema: str, use_case: UseCase) -> dict:
     target contains only 0 and 1.
     """
     validate_schema_name(schema)
-    queries = load_named_queries(use_case.sql.training_table)
-    if len(queries) != 1:
-        raise SqlError("The training-table file must contain exactly one query")
-    body = next(iter(queries.values()))
+    body = training_body(use_case)
 
     with connect(schema) as conn, psycopg.ClientCursor(conn) as cur:
         cur.execute(f"DROP TABLE IF EXISTS {TRAINING_TABLE}")
@@ -135,7 +168,7 @@ def build_training_set(schema: str, use_case: UseCase) -> dict:
             conn.rollback()
             raise SqlError(
                 f"The training query does not return columns the use case config expects: {missing}. "
-                f"Fix the SQL or the 'features'/'target' in {use_case.id}.yaml."
+                f"Fix the SQL or the 'features'/'target' of use case '{use_case.id}'."
             )
         cur.execute(f"SELECT count(*) FROM {TRAINING_TABLE}")
         rows = cur.fetchone()[0]
@@ -162,8 +195,7 @@ def features_as_of(schema: str, use_case: UseCase, cutoff_date: str) -> pd.DataF
         cutoff = date.fromisoformat(str(cutoff_date))
     except ValueError as exc:
         raise SqlError(f"cutoff_date must be YYYY-MM-DD, got {cutoff_date!r}") from exc
-    queries = load_named_queries(use_case.sql.training_table)
-    body = next(iter(queries.values()))
+    body = training_body(use_case)
     params = {**use_case.parameters, "cutoff_date": cutoff.isoformat()}
     return run_query(schema, body, params)
 
