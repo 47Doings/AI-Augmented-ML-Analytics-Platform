@@ -36,23 +36,58 @@
     <!-- logged in -->
     <div id="app" hidden>
       <section class="card">
-        <h2>1. Choose what to analyse</h2>
-        <p class="muted">Each use case is a configuration file plus SQL. The platform code is the same for all of them.</p>
-        <div id="usecases" class="choices"></div>
-      </section>
-
-      <section class="card">
-        <h2>2. Get data</h2>
-        <p class="muted">Generates a synthetic subscription business (with deliberate data problems) and loads it into your private workspace.</p>
-        <div class="row">
-          <label class="inline">Customers <input id="customers" type="number" min="1000" max="5000" step="500" value="5000"></label>
-          <button id="btn-data" class="primary" type="button">Generate and load data</button>
+        <h2>1. Choose your data</h2>
+        <div class="tabs" role="tablist">
+          <button id="mode-demo" class="tab active" type="button">Try the demo business</button>
+          <button id="mode-own" class="tab" type="button">Use my own data</button>
         </div>
-        <p id="data-msg" class="msg" role="status"></p>
+
+        <div id="panel-demo">
+          <p class="muted">A made-up subscription company with deliberate data problems. Pick a question, then generate its data. Each use case is a configuration file plus SQL; the platform code is the same for all of them.</p>
+          <div id="usecases" class="choices"></div>
+          <div class="row spaced">
+            <label class="inline">Customers <input id="customers" type="number" min="1000" max="5000" step="500" value="5000"></label>
+            <button id="btn-data" class="primary" type="button">Generate and load data</button>
+          </div>
+          <p id="data-msg" class="msg" role="status"></p>
+        </div>
+
+        <div id="panel-own" hidden>
+          <p class="muted">Upload one CSV file where each row is one record (a customer, a loan, an order ...). Up to 10 MB and 200,000 rows, UTF-8. The file is kept only in your private workspace. The AI never sees rows: only summary figures and category names from the results.</p>
+          <div class="row">
+            <input id="file" type="file" accept=".csv,text/csv">
+            <button id="btn-upload" class="primary" type="button">Upload and check</button>
+          </div>
+          <p id="upload-msg" class="msg" role="status"></p>
+
+          <div id="profile" hidden>
+            <details open><summary>What is in your file</summary><div id="profile-table"></div></details>
+            <h3>What do you want to find out?</h3>
+            <form id="form-map" autocomplete="off">
+              <label>Name for this analysis <input name="analysis_name" required minlength="2" maxlength="80" value="Analysis of my data"></label>
+              <label>Business question <input name="business_question" required minlength="5" maxlength="300" placeholder="For example: which applicants are most likely to default?"></label>
+              <label>What kind of answer <select name="problem_type">
+                <option value="classification">A yes / no outcome (will default, will cancel, will buy)</option>
+                <option value="regression">An amount (spend, price, days)</option>
+              </select></label>
+              <label>Column to predict <select name="target_column"></select></label>
+              <label id="pos-wrap">Which value counts as the outcome to predict <select name="positive_value"></select></label>
+              <label>Column that identifies a row (optional; repeated ids are counted as duplicates) <select name="id_column"></select></label>
+              <label>Date column (optional; adds a month-by-month view) <select name="date_column"></select></label>
+              <fieldset>
+                <legend>Columns to learn from</legend>
+                <div id="features" class="checks"></div>
+                <p class="note">Only tick columns you would know <b>before</b> the outcome happens. A column recorded afterwards (such as a cancellation date or a final status) makes the model look perfect and be useless; the platform warns about suspiciously good columns, but you know your data best.</p>
+              </fieldset>
+              <button class="primary" type="submit">Save choices</button>
+              <p id="map-msg" class="msg" role="status"></p>
+            </form>
+          </div>
+        </div>
       </section>
 
       <section class="card">
-        <h2>3. Run the analysis</h2>
+        <h2>2. Run the analysis</h2>
         <p class="muted">Cleaning, data-quality checks, SQL analysis, model training, explanation and drift check.</p>
         <button id="btn-run" class="primary" type="button">Run analysis</button>
         <ol id="steps" class="steps"></ol>

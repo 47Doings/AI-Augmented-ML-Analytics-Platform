@@ -30,6 +30,13 @@ CREATE TABLE IF NOT EXISTS platform.workspaces (
     created_at      timestamptz  NOT NULL DEFAULT now()
 );
 
+-- The business's own data (added after the first version; safe to run on an existing database).
+--   upload_profile  what the uploaded file contains (columns, types, gaps), shown in the mapping form
+--   custom_mapping  the business's column choices (target, inputs, ...); SQL is rebuilt from it on every run
+ALTER TABLE platform.workspaces ADD COLUMN IF NOT EXISTS upload_profile   jsonb;
+ALTER TABLE platform.workspaces ADD COLUMN IF NOT EXISTS upload_loaded_at timestamptz;
+ALTER TABLE platform.workspaces ADD COLUMN IF NOT EXISTS custom_mapping   jsonb;
+
 CREATE TABLE IF NOT EXISTS platform.runs (
     run_id        serial       PRIMARY KEY,
     workspace_id  integer      NOT NULL REFERENCES platform.workspaces(workspace_id) ON DELETE CASCADE,

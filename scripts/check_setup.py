@@ -104,11 +104,11 @@ try:
 except ValueError as exc:
     report(False, "Generated workspace schema names pass validation", str(exc))
 
-# 7. Snwolley (informational only) ---------------------------------------
+# 7. Snwolley (informational only; no call is made here, the API is rate limited) -----
 if settings.snwolley_configured:
-    print("[INFO] Snwolley credentials are set (not called yet; adapter comes in Step 8)")
+    print("[INFO] Snwolley API key is set; AI insights will be requested during each run")
 else:
-    print("[INFO] Snwolley not configured - expected until Npontu sends the toolkit")
+    print("[INFO] SNWOLLEY_API_KEY not set - runs will show the labelled template summary instead of AI insights")
 
 print()
 print("All checks passed." if failures == 0 else f"{failures} check(s) failed.")

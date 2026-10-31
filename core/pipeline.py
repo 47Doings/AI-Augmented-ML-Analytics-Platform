@@ -30,9 +30,10 @@ from core.ai.insights import generate_insights
 from core.ai.snwolley_adapter import get_provider
 from core.config import PROJECT_ROOT, get_settings
 from core.drift import drift_report
-from core.loader import apply_sql_file, load_csv_dir
+from core.custom_usecase import leakage_checks
+from core.loader import apply_sql_file, apply_sql_text, load_csv_dir
 from core.ml_pipeline import prepare_frame, train
-from core.sql_runner import build_training_set, features_as_of, run_named
+from core.sql_runner import build_training_set, features_as_of, kpi_query, named_queries, read_training_set, run_queries
 from core.use_case import UseCase
 from datagen.telecom import GenConfig, generate, write_outputs
 
@@ -84,7 +85,18 @@ def table_payload(df: pd.DataFrame, limit: int = MAX_ROWS_PER_TABLE) -> dict:
 
 
 def _shown(value: float, fmt: str) -> str:
+    if fmt == "number" and float(value).is_integer():
+        return f"{value:,.0f}"  # counts read as 5,000, not 5,000.00
     return {"percent": f"{value:.1%}", "currency": f"GHS {value:,.0f}"}.get(fmt, f"{value:,.2f}")
+
+
+def _merge_checks(dq: pd.DataFrame, extra: pd.DataFrame) -> pd.DataFrame:
+    """Add checks found in Python (e.g. leakage) to the SQL data-quality table and keep 'worst first'."""
+    if not len(extra):
+        return dq
+    both = pd.concat([dq, extra], ignore_index=True) if len(dq) else extra.copy()
+    order = both["severity"].map({"high": 0, "medium": 1, "low": 2}).fillna(3)
+    return both.assign(_o=order).sort_values(["_o", "issues", "check_id"], ascending=[True, False, True]).drop(columns="_o").reset_index(drop=True)
 
 
 class _Tracker:
@@ -151,23 +163,37 @@ def run_pipeline(schema: str, uc: UseCase, out_dir: Path, on_progress: Callable[
     t = _Tracker(on_progress)
     params = uc.parameters
 
-    t.run("clean_layer", lambda: apply_sql_file(schema, VIEWS_SQL))
+    # the clean layer: a hand-written file for the demo use cases, SQL generated from the column mapping for uploads
+    t.run("clean_layer", lambda: apply_sql_text(schema, uc.inline_sql.clean_layer) if uc.inline_sql else apply_sql_file(schema, VIEWS_SQL))
 
+    dq_queries = named_queries(uc, "data_quality")
     dq = t.run(
         "data_quality",
-        lambda: run_named(schema, uc.sql.data_quality, params)["data_quality"] if uc.sql.data_quality else pd.DataFrame(),
+        lambda: run_queries(schema, dq_queries, params)["data_quality"] if dq_queries else pd.DataFrame(),
         lambda df: f"{int((df['issues'] > 0).sum())} of {len(df)} checks found problems" if len(df) else "none configured",
     )
 
+    leakage = pd.DataFrame()
+
+    def training():
+        nonlocal leakage
+        info = build_training_set(schema, uc)
+        if uc.data_source == "upload":  # a flat file has no 'as of' date, so look for inputs that give the answer away
+            leakage = leakage_checks(read_training_set(schema), uc)
+        return info
+
     summary = t.run(
         "training_table",
-        lambda: build_training_set(schema, uc),
-        lambda s: f"{s['rows']:,} rows" + (f", {s['positives']:,} positives ({s['positive_rate']:.1%})" if "positives" in s else ""),
+        training,
+        lambda s: f"{s['rows']:,} rows" + (f", {s['positives']:,} positives ({s['positive_rate']:.1%})" if "positives" in s else "")
+        + (f"; {len(leakage)} input(s) look too good to be true" if len(leakage) else ""),
     )
+    dq = _merge_checks(dq, leakage)
 
+    bq_queries = named_queries(uc, "business_questions")
     questions: dict[str, pd.DataFrame] = {}
-    if uc.sql.business_questions:
-        questions = t.run("business_questions", lambda: run_named(schema, uc.sql.business_questions, params),
+    if bq_queries:
+        questions = t.run("business_questions", lambda: run_queries(schema, bq_queries, params),
                           lambda q: f"{len(q)} questions")
     else:
         t.skip("business_questions", "none configured")
@@ -175,7 +201,7 @@ def run_pipeline(schema: str, uc: UseCase, out_dir: Path, on_progress: Callable[
     def kpis():
         out = []
         for k in uc.kpis:
-            value = float(next(iter(run_named(schema, k.sql, params).values())).iloc[0, 0])
+            value = float(run_queries(schema, {k.id: kpi_query(uc, k)}, params)[k.id].iloc[0, 0])
             out.append({"id": k.id, "label": k.label, "value": value, "format": k.format, "shown": _shown(value, k.format)})
         return out
 
@@ -187,7 +213,7 @@ def run_pipeline(schema: str, uc: UseCase, out_dir: Path, on_progress: Callable[
     drift = None
     cutoff2 = later_cutoff(uc)
     if cutoff2 is None:
-        t.skip("monitoring", "no later date available")
+        t.skip("monitoring", "not available for uploaded files yet (no export date to compare against)" if uc.data_source == "upload" else "no later date available")
     else:
         def monitor():
             bundle = joblib.load(out_dir / "ml" / "model.joblib")
@@ -219,6 +245,7 @@ def run_pipeline(schema: str, uc: UseCase, out_dir: Path, on_progress: Callable[
         "use_case": {
             "id": uc.id, "name": uc.name, "problem_type": uc.problem_type, "business_question": uc.business_question.strip(),
             "target": uc.target.name, "target_description": uc.target.description.strip(),
+            "data_source": uc.data_source,
             "parameters": {k: v for k, v in uc.parameters.items()},
         },
         "training_table": {k: v for k, v in summary.items() if k != "columns"},

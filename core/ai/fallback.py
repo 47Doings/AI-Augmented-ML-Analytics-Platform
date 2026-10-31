@@ -138,7 +138,11 @@ class TemplateProvider:
             if "test_positives" in s.values:
                 text += f" Only {FORMATS['n0'](s.values['test_positives'])} of them had the outcome, so the scores would move on another sample."
             caveats.append({"text": text, "facts": ["model.split"]})
-        caveats.append({"text": "All figures come from synthetic demo data, not from a real business.", "facts": ["scope"]})
+        if by["scope"].labels.get("data_source") == "uploaded by the business":
+            caveats.append({"text": "All figures come from the file the business uploaded. It was not independently verified, and the model can only reflect patterns in that file.",
+                            "facts": ["scope"]})
+        else:
+            caveats.append({"text": "All figures come from synthetic demo data, not from a real business.", "facts": ["scope"]})
         caveats.append({"text": "The inputs listed describe patterns in past data. They show association only and do not explain why the outcome happens.",
                         "facts": [drivers[0].id] if drivers else ["model.test"]})
 
