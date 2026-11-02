@@ -93,7 +93,7 @@ class SnwolleyAdapter:
         api_key: str,
         base_url: str | None = None,
         *,
-        timeout: float = 60.0,
+        timeout: float = 300.0,
         max_wait: float = 60.0,
         client: httpx.Client | None = None,
         sleep: Callable[[float], None] = time.sleep,
