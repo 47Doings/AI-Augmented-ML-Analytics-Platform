@@ -56,14 +56,16 @@ except psycopg.Error as exc:
 
 # 3. The Step 1 workspace schema -----------------------------------------
 try:
+    expected = {"plans", "customers", "subscriptions", "payments", "usage_monthly", "support_tickets"}
     with connect("ws_demo") as conn:
-        count = conn.execute(
-            "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'ws_demo'"
-        ).fetchone()[0]
-    report(count == 6, "Workspace schema ws_demo has 6 tables", f"found {count}")
+        rows = conn.execute(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = 'ws_demo' AND table_type = 'BASE TABLE'"
+        ).fetchall()
+    found = {r[0] for r in rows}
+    report(expected <= found, "Workspace schema ws_demo has the 6 data tables", f"found {sorted(found)}")
 except psycopg.Error as exc:
-    report(False, "Workspace schema ws_demo has 6 tables", first_line(exc))
-
+    report(False, "Workspace schema ws_demo has the 6 data tables", first_line(exc))
 # 4. Use cases load and validate -----------------------------------------
 use_cases = []
 try:
